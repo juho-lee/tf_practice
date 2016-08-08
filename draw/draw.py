@@ -3,11 +3,7 @@ import numpy as np
 import tensorflow.contrib.layers as layers
 from attention import *
 
-def linear(input, num_outputs):
-    return layers.fully_connected(input, num_outputs,
-            weights_initializer=tf.random_normal_initializer(),
-            activation_fn=None)
-LSTM = tf.rnn_cell.BasicLSTMCell
+LSTM = tf.nn.rnn_cell.BasicLSTMCell
 
 def gaussian_sample(mean, log_var):
     eps = tf.random_normal(tf.shape(log_var))
@@ -32,12 +28,53 @@ class DRAW(object):
         self.enc_RNN = LSTM(n_hid, 2*self.attunit.read_dim+n_hid)
         self.dec_RNN = LSTM(n_hid, n_lat)
 
-    def encode(self, x):
+    def get_output(self, x):
+        batch_size = tf.shape(x)[0]
+        c = [0]*self.n_step
+        z_mean = [0]*self.n_step
+        z_log_var = [0]*self.n_step
+        h_dec = tf.zeros((batch_size, self.n_hid))
+        cell_enc = self.enc_RNN.zero_state(batch_size, tf.float32)
+        cell_dec = self.dec_RNN.zero_state(batch_size, tf.float32)
 
-        c_prev = tf.zeros(tf.shape(x))
-        h_dec_prev = tf.zeros((tf.shape(x)[0], self.n_hid))
-        with tf.variable_scope("encode"):
-            x_err = x - tf.sigmoid(c_prev)
-            linear(h_dec_prev, 5)
+        # t == 0
+        x_err = x - tf.sigmoid(tf.zeros(tf.shape(x)))
+        r = self.attunit.read(x, x_err, h_dec)
+        with tf.variable_scope("enc_RNN"):
+            h_enc, cell_enc = self.enc_RNN(cell_enc, tf.concat(1, [r,h_dec]))
+        z_mean[0] = linear(h_enc, self.n_lat, "z_mean")
+        z_log_var[0] = linear(h_enc, self.n_lat, "z_log_var")
+        z = gaussian_sample(z_mean[0], z_log_var[0])
+        with tf.variable_scope("dec_RNN"):
+            h_dec, cell_dec = self.dec_RNN(cell_dec, z)
+        c[0] = self.attunit.write(h_dec)
+        # kld loss
+        L_z = gaussian_kld(z_mean[0], z_log_var[0])
 
+        # t > 0
+        for t in range(1, self.n_step):
+            x_err = x - tf.sigmoid(c[t-1])
+            r = self.attunit.read(x, x_err, h_dec, reuse=True)
+            with tf.variable_scope("enc_RNN", reuse=True):
+                h_enc, cell_enc = self.enc_RNN(cell_enc, tf.concat(1, [r,h_dec]))
+            z_mean[t] = linear(h_enc, self.n_lat, "z_mean", reuse=True)
+            z_log_var[t] = linear(h_enc, self.n_lat, "z_log_var", reuse=True)
+            z = gaussian_sample(z_mean[t], z_log_var[t])
+            with tf.variable_scope("dec_RNN", reuse=True):
+                h_dec, cell_dec = self.dec_RNN(cell_dec, z)
+            c[t] = c[t-1] + write(h_dec)
+            L_z = L_z + gaussian_kld(z_mean[t], z_log_var[t])
 
+        dec_x = tf.nn.sigmoid(c[-1])
+        L_x = bernoulli_ll_loss(x, dec_x)
+        return L_x, L_z, dec_x, z, c
+
+image_shape = [1, 28, 28]
+N = 5
+n_hid = 200
+n_lat = 20
+n_step = 10
+model = DRAW(image_shape, N, n_hid, n_lat, n_step)
+
+x = tf.placeholder(tf.float32, [None, 784])
+L_x, L_z, dec_x, z, c = model.get_output(x)
