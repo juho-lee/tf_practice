@@ -1,7 +1,6 @@
 data/*
 results/*
 *.pyc
-*.png
 *.pickle
 *.pkl
 *.gz
