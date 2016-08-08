@@ -4,8 +4,7 @@ import numpy as np
 
 def linear(x, dim, scope, reuse=False):
     with tf.variable_scope(scope, reuse=reuse):
-        return layers.fully_connected(x, dim, activation_fn=None,
-                weights_initializer=tf.random_normal_initializer())
+        return layers.fully_connected(x, dim, activation_fn=None)
 
 class AttentionUnit(object):
     def __init__(self, image_shape, N):
