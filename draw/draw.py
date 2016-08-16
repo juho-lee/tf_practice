@@ -86,16 +86,16 @@ if __name__ == "__main__":
     n_in = np.prod(image_shape)
     n_hid = 256
     n_lat = 20
-    n_step = 30
+    n_step = 10
     model = DRAW(image_shape, N, n_hid, n_lat, n_step)
     x = tf.placeholder(tf.float32, [None, n_in])
     L_x, L_z, dec_x = model.get_output(x)
     loss = L_x + L_z
     train_step = tf.train.AdamOptimizer().minimize(loss)
 
-    from utils import mat_to_tileimg
+    from utils.image import mat_to_tileimg
     import matplotlib.pyplot as plt
-    n_epochs = 10
+    n_epochs = 4
     with tf.Session() as sess:
         sess.run(tf.initialize_all_variables())
         for i in range(n_epochs):

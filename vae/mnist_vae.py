@@ -43,17 +43,16 @@ n_test_batches = mnist.test.num_examples / batch_size
 
 n_in = 784
 n_hid = 200
-n_lat = 10
+n_lat = 20
 model = VAE(n_in, n_hid, n_lat)
 ll_loss = model.get_ll_loss()
 kld = model.get_kld()
 loss = ll_loss + kld
 train_step = tf.train.AdamOptimizer().minimize(loss)
 
-n_epochs = 20
+n_epochs = 30
 import time
-from utils import mat_to_tileimg
-from utils import gen_grid
+from utils.image import mat_to_tileimg, gen_grid
 import matplotlib.pyplot as plt
 import numpy as np
 with tf.Session() as sess:
