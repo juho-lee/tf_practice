@@ -2,6 +2,8 @@ import tensorflow as tf
 import tensorflow.contrib.layers as layers
 import numpy as np
 
+# draw-like attention
+
 def linear(x, dim, scope, reuse=False):
     return layers.fully_connected(x, dim,
             scope=scope, reuse=reuse, activation_fn=None)

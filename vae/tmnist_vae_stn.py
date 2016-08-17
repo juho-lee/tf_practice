@@ -1,10 +1,16 @@
 import tensorflow as tf
-import tensorflow.contrib.layers as layers
+from tensorflow.contrib import layers
 import numpy as np
-from attention import *
 import time
 import matplotlib.pyplot as plt
+from utils.data import load_pkl
+from utils.image import batchmat_to_tileimg, batchimg_to_tileimg
+from spatial_transformer import spatial_transformer
+
 fc = layers.fully_connected
+conv = layers.convolution2d
+pool = layers.max_pool2d
+flat = layers.flatten
 
 def gaussian_sample(mean, log_var):
     eps = tf.random_normal(tf.shape(log_var))
@@ -18,32 +24,36 @@ def bernoulli_neg_ll(x, p, eps=1.0e-10):
     return tf.reduce_mean(
             -tf.reduce_sum(x*tf.log(p+eps)+(1.-x)*tf.log(1-p+eps), 1))
 
-h = 60
-w = 60
-N = 20
-attunit = AttentionUnit([1, h, w], N)
-n_hid = 300
+n_hid = 500
 n_lat = 20
 
-x = tf.placeholder(tf.float32, [None, h*w])
-h_enc_att = fc(x, n_hid)
-x_att = attunit.read(x, h_enc_att)
-h_enc = fc(tf.concat(1, [x_att, h_enc_att]), n_hid)
+x = tf.placeholder(tf.float32, [None, 60*60])
+x_img = tf.reshape(x, [-1, 60, 60, 1])
+h_enc = fc(x, n_hid)
+# encoder localization net
+loc_enc = fc(fc(h_enc, 50), 6, activation_fn=None,
+        weights_initializer=tf.constant_initializer(np.zeros((50, 6))),
+        biases_initializer=tf.constant_initializer(
+            np.array([[1.,0,0],[0,1.,0]]).flatten()))
+x_trans = flat(spatial_transformer(x_img, loc_enc, [15, 15]))
+h_enc = fc(tf.concat(1, [x_trans, h_enc]), n_hid)
 z_mean = fc(h_enc, n_lat, activation_fn=None)
 z_log_var = fc(h_enc, n_lat, activation_fn=None)
 z = gaussian_sample(z_mean, z_log_var)
 
 h_dec = fc(z, n_hid)
-p = tf.nn.sigmoid(attunit.write(h_dec))
+p_trans = tf.reshape(fc(h_dec, 15*15, activation_fn=None), [-1, 15, 15, 1])
+# decoder localization net
+loc_dec = fc(fc(h_dec, 50), 6, activation_fn=None,
+        weights_initializer=tf.constant_initializer(np.zeros((50, 6))),
+        biases_initializer=tf.constant_initializer(
+            np.array([[1.,0,0],[0,1.,0]]).flatten()))
+p = tf.nn.sigmoid(flat(spatial_transformer(p_trans, loc_dec, [60, 60])))
 
 neg_ll = bernoulli_neg_ll(x, p)
 kld = gaussian_kld(z_mean, z_log_var)
 loss = neg_ll + kld
 train_step = tf.train.AdamOptimizer().minimize(loss)
-
-from utils.data import load_pkl
-from utils.image import batchmat_to_tileimg
-import matplotlib.pyplot as plt
 
 train_xy, _, test_xy = load_pkl('data/tmnist/tmnist.pkl.gz')
 train_x, _ = train_xy
@@ -53,7 +63,7 @@ batch_size = 100
 n_train_batches = len(train_x)/batch_size
 n_test_batches = len(test_x)/batch_size
 
-n_epochs = 30
+n_epochs = 10
 with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
     for i in range(n_epochs):
@@ -71,22 +81,3 @@ with tf.Session() as sess:
         print "Epoch %d (%.3f sec), train neg ll %f, train kld %f" \
                 % (i+1, time.time()-start, train_neg_ll, train_kld)
         np.random.shuffle(train_x)
-
-    I_orig = batchmat_to_tileimg(test_x[0:batch_size], (h, w), (10, 10))
-    p_test = sess.run(p, feed_dict={x:test_x[0:batch_size]})
-    I_recon = batchmat_to_tileimg(p_test, (h, w), (10, 10))
-    x_att_test = sess.run(x_att, feed_dict={x:test_x[0:batch_size]})
-    I_att = batchmat_to_tileimg(x_att_test, (N, N), (10, 10))
-    p_gen = sess.run(p, feed_dict={z:np.random.normal(size=(batch_size,n_lat))})
-    I_gen = batchmat_to_tileimg(p_gen, (h, w), (10, 10))
-    plt.figure("original")
-    plt.gray()
-    plt.axis('off')
-    plt.imshow(I_orig)
-    plt.figure("reconstructed")
-    plt.imshow(I_recon)
-    plt.figure("attended")
-    plt.imshow(I_att)
-    plt.figure("generated")
-    plt.imshow(I_gen)
-    plt.show()

@@ -2,7 +2,7 @@ import tensorflow as tf
 import tensorflow.contrib.layers as layers
 import numpy as np
 import time
-from utils.image import mat_to_tileimg
+from utils.image import batchmat_to_tileimg
 import matplotlib.pyplot as plt
 fc = layers.fully_connected
 
@@ -67,9 +67,9 @@ with tf.Session() as sess:
         print "Epoch %d (%.3f sec), train neg ll %f, train kld %f" \
                 % (i+1, time.time()-start, train_neg_ll, train_kld)
 
-    I_orig = mat_to_tileimg(test_x[0:batch_size], (60, 60), (10, 10))
+    I_orig = batchmat_to_tileimg(test_x[0:batch_size], (60, 60), (10, 10))
     p_test = sess.run(p, feed_dict={x:test_x[0:batch_size]})
-    I_recon = mat_to_tileimg(p_test, (60, 60), (10, 10))
+    I_recon = batchmat_to_tileimg(p_test, (60, 60), (10, 10))
     plt.figure()
     plt.gray()
     plt.axis('off')

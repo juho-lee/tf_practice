@@ -93,7 +93,7 @@ if __name__ == "__main__":
     loss = L_x + L_z
     train_step = tf.train.AdamOptimizer().minimize(loss)
 
-    from utils.image import mat_to_tileimg
+    from utils.image import batchmat_to_tileimg
     import matplotlib.pyplot as plt
     n_epochs = 4
     with tf.Session() as sess:
@@ -121,7 +121,7 @@ if __name__ == "__main__":
             for j in range(n_step):
                 strip = test_dec_x[j][i].reshape((1, n_in))
                 X = np.concatenate([X, strip], axis=0)
-        I = mat_to_tileimg(X, (28, 28), (10, n_step))
+        I = batchmat_to_tileimg(X, (28, 28), (10, n_step))
         plt.figure()
         plt.gray()
         plt.axis('off')
