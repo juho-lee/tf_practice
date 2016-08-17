@@ -21,7 +21,7 @@ def bernoulli_neg_ll(x, p, eps=1.0e-10):
 
 h = 60
 w = 60
-N = 15
+N = 20
 attunit = AttentionUnit([1, h, w], N)
 n_hid = 300
 n_lat = 20
