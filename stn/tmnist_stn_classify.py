@@ -4,10 +4,13 @@ import numpy as np
 from utils.data import load_pkl
 from spatial_transformer import spatial_transformer
 import time
+from utils.image import batchmat_to_tileimg, batchimg_to_tileimg
+import matplotlib.pyplot as plt
 
 conv = layers.convolution2d
 pool = layers.max_pool2d
 fc = layers.fully_connected
+bn = layers.batch_norm
 
 x = tf.placeholder(tf.float32, [None, 60*60])
 x_tensor = tf.reshape(x, [-1, 60, 60, 1])
@@ -15,18 +18,31 @@ y = tf.placeholder(tf.int32, [None])
 y_one_hot = layers.one_hot_encoding(y, 10)
 
 # localization net
-loc = pool(x_tensor, [2, 2])
-loc = conv(loc, 20, [5, 5], padding='VALID')
-loc = pool(loc, [2, 2])
-loc = conv(loc, 20, [5, 5], padding='VALID')
+"""
+loc = pool(conv(x_tensor, 8, [5, 5], padding='VALID'), [2, 2])
+loc = pool(conv(loc, 16, [5, 5], padding='VALID'), [2, 2])
 loc = fc(layers.flatten(loc), 50)
+"""
+
+loc = pool(x_tensor, [2, 2])
+loc = conv(loc, 5, [5, 5], padding='VALID')
+loc = pool(loc, [2, 2])
+loc = conv(loc, 10, [5, 5], padding='VALID')
+loc = fc(layers.flatten(loc), 50)
+
+"""
+loc = fc(fc(x, 500), 50)
+#loc = bn(fc(x, 500, activation_fn=None), activation_fn=tf.nn.relu)
+#loc = bn(fc(loc, 50, activation_fn=None), activation_fn=tf.nn.relu)
+"""
+
 loc = fc(loc, 6, activation_fn=None,
         weights_initializer=tf.constant_initializer(np.zeros((50, 6))),
         biases_initializer=tf.constant_initializer(
             np.array([[1.,0,0],[0,1.,0]]).flatten()))
 
 # classification net
-trans = spatial_transformer(x_tensor, loc, 3.0)
+trans = spatial_transformer(x_tensor, loc, [15, 15])
 cl = conv(trans, 32, [3, 3], padding='VALID')
 cl = pool(cl, [2, 2])
 cl = conv(trans, 32, [3, 3], padding='VALID')
@@ -73,3 +89,17 @@ with tf.Session() as sess:
 
         print "Epoch %d (%f sec), train acc %f, test acc %f" \
                 % (i+1, time.time()-start, train_acc, test_acc)
+
+    attended = sess.run(trans, {x:test_x[0:batch_size]})
+    I_orig = batchmat_to_tileimg(test_x[0:batch_size], (60, 60), (10, 10))
+    I_attn = batchimg_to_tileimg(attended, (10, 10), channel_dim=3)
+
+    plt.figure('original')
+    plt.gray()
+    plt.axis('off')
+    plt.imshow(I_orig)
+    plt.figure('attended')
+    plt.gray()
+    plt.axis('off')
+    plt.imshow(I_attn)
+    plt.show()

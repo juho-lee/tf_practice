@@ -54,12 +54,11 @@ def interpolate(U, x_s, y_s, out_height, out_width):
     output = tf.add_n([wa*Ia, wb*Ib, wc*Ic, wd*Id])
     return output
 
-def spatial_transformer(U, theta, downsample_factor):
+def spatial_transformer(U, theta, out_size):
     num_batch = tf.shape(U)[0]
     height, width, num_channels = U.get_shape()[1:]
+    out_height, out_width = out_size
 
-    out_height = height / downsample_factor
-    out_width = width / downsample_factor
     grid = tf.tile(tf.expand_dims(meshgrid(out_height, out_width), 0),
             [num_batch, 1, 1])
 
@@ -82,8 +81,8 @@ if __name__ == '__main__':
 
     U_ = tf.placeholder(tf.float32, [None, height, width, num_channels])
     theta_ = tf.placeholder(tf.float32, [None, 6])
-    downsample_factor = 4.
-    T_ = spatial_transfomer(U_, theta_, downsample_factor)
+    out_size = [height/4, width/4]
+    T_ = spatial_transformer(U_, theta_, out_size)
 
     with tf.Session() as sess:
         T = sess.run(T_, {U_:U, theta_:theta})
