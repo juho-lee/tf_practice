@@ -70,6 +70,20 @@ def spatial_transformer(U, theta, out_size):
             interpolate(U, x_s, y_s, out_height, out_width),
             tf.pack([num_batch, out_height, out_width, num_channels]))
 
+# last layer of localization net
+from tensorflow.contrib import layers
+def loc_last(input):
+    if len(input.get_shape()) == 4:
+        input = layers.flatten(input)
+    num_inputs = input.get_shape()[1]
+
+    W_init = tf.constant_initializer(np.zeros((num_inputs, 6)))
+    b_init = tf.constant_initializer(
+            np.array([[1.,0,0],[0,1.,0]]).flatten())
+    return layers.fully_connected(input, 6, activation_fn=None,
+        weights_initializer=W_init,
+        biases_initializer=b_init)
+
 if __name__ == '__main__':
     from scipy import ndimage
     import matplotlib.pyplot as plt
@@ -77,11 +91,11 @@ if __name__ == '__main__':
     height, width, num_channels = U.shape
     U = U / 255.
     U = U.reshape(1, height, width, num_channels).astype('float32')
-    theta = np.array([[4.,0.2,0],[0.4,2.,0]]).reshape(1, 6)
+    theta = np.array([[1.,0.,0],[0,3.,0]]).reshape(1, 6)
 
     U_ = tf.placeholder(tf.float32, [None, height, width, num_channels])
     theta_ = tf.placeholder(tf.float32, [None, 6])
-    out_size = [height/4, width/4]
+    out_size = [5*height, 5*width]
     T_ = spatial_transformer(U_, theta_, out_size)
 
     with tf.Session() as sess:

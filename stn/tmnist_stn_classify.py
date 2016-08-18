@@ -2,7 +2,7 @@ import tensorflow as tf
 import tensorflow.contrib.layers as layers
 import numpy as np
 from utils.data import load_pkl
-from spatial_transformer import spatial_transformer
+from spatial_transformer import spatial_transformer, loc_last
 import time
 from utils.image import batchmat_to_tileimg, batchimg_to_tileimg
 import matplotlib.pyplot as plt
@@ -28,7 +28,6 @@ loc = pool(x_tensor, [2, 2])
 loc = conv(loc, 5, [5, 5], padding='VALID')
 loc = pool(loc, [2, 2])
 loc = conv(loc, 10, [5, 5], padding='VALID')
-loc = fc(layers.flatten(loc), 50)
 
 """
 loc = fc(fc(x, 500), 50)
@@ -36,10 +35,7 @@ loc = fc(fc(x, 500), 50)
 #loc = bn(fc(loc, 50, activation_fn=None), activation_fn=tf.nn.relu)
 """
 
-loc = fc(loc, 6, activation_fn=None,
-        weights_initializer=tf.constant_initializer(np.zeros((50, 6))),
-        biases_initializer=tf.constant_initializer(
-            np.array([[1.,0,0],[0,1.,0]]).flatten()))
+loc = loc_last(loc)
 
 # classification net
 trans = spatial_transformer(x_tensor, loc, [15, 15])

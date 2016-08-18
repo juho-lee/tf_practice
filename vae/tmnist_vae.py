@@ -38,7 +38,6 @@ loss = neg_ll + kld
 train_step = tf.train.AdamOptimizer().minimize(loss)
 
 from utils.data import load_pkl
-from utils.image import mat_to_tileimg
 import matplotlib.pyplot as plt
 
 train_xy, _, test_xy = load_pkl('data/tmnist/tmnist.pkl.gz')
@@ -70,10 +69,18 @@ with tf.Session() as sess:
     I_orig = batchmat_to_tileimg(test_x[0:batch_size], (60, 60), (10, 10))
     p_test = sess.run(p, feed_dict={x:test_x[0:batch_size]})
     I_recon = batchmat_to_tileimg(p_test, (60, 60), (10, 10))
-    plt.figure()
+    p_gen = sess.run(p, feed_dict={z:np.random.normal(size=(batch_size,n_lat))})
+    I_gen = batchmat_to_tileimg(p_gen, (60, 60), (10, 10))
+    plt.figure("original")
     plt.gray()
     plt.axis('off')
     plt.imshow(I_orig)
-    plt.figure()
+    plt.figure("reconstructed")
+    plt.gray()
+    plt.axis('off')
     plt.imshow(I_recon)
+    plt.figure("generated")
+    plt.gray()
+    plt.axis('off')
+    plt.imshow(I_gen)
     plt.show()

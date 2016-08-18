@@ -22,8 +22,8 @@ h = 60
 w = 60
 N = 20
 attunit = AttentionUnit([1, h, w], N)
-n_hid = 300
-n_lat = 20
+n_hid = 500
+n_lat = 25
 
 x = tf.placeholder(tf.float32, [None, h*w])
 h_enc_att = fc(x, n_hid)
