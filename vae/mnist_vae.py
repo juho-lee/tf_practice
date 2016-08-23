@@ -42,7 +42,7 @@ n_train_batches = mnist.train.num_examples / batch_size
 n_test_batches = mnist.test.num_examples / batch_size
 
 n_in = 784
-n_hid = 200
+n_hid = 500
 n_lat = 20
 model = VAE(n_in, n_hid, n_lat)
 ll_loss = model.get_ll_loss()
@@ -52,7 +52,7 @@ train_step = tf.train.AdamOptimizer().minimize(loss)
 
 n_epochs = 30
 import time
-from utils.image import mat_to_tileimg, gen_grid
+from utils.image import batchmat_to_tileimg, gen_grid
 import matplotlib.pyplot as plt
 import numpy as np
 with tf.Session() as sess:
@@ -70,22 +70,23 @@ with tf.Session() as sess:
 
         train_ll_loss /= n_train_batches
         train_kld /= n_train_batches
-        print "Epoch %d (%f sec), train ll loss %f, train kld %f" \
-                % (i+1, time.time()-start, train_ll_loss, train_kld)
+        print "Epoch %d (%f sec), train ll loss %f, train kld %f, total %f" \
+                % (i+1, time.time()-start, train_ll_loss, train_kld,
+                        train_ll_loss + train_kld)
     test_x, _ = mnist.test.next_batch(batch_size)
-    I_orig = mat_to_tileimg(test_x, (28, 28), (10, 10))
+    I_orig = batchmat_to_tileimg(test_x, (28, 28), (10, 10))
     p_recon = sess.run(model.dec_p, feed_dict={model.x:test_x})
-    I_recon = mat_to_tileimg(p_recon, (28, 28), (10, 10))
+    I_recon = batchmat_to_tileimg(p_recon, (28, 28), (10, 10))
     eps = gen_grid(2, 10) if n_lat == 2 \
             else np.random.normal(size=(batch_size,n_lat))
     p_gen = sess.run(model.dec_p, feed_dict={model.z:eps})
-    I_gen = mat_to_tileimg(p_gen, (28, 28), (10, 10))
-    plt.figure()
+    I_gen = batchmat_to_tileimg(p_gen, (28, 28), (10, 10))
+    plt.figure("generated")
     plt.gray()
     plt.axis('off')
     plt.imshow(I_gen)
-    plt.figure()
+    plt.figure("original")
     plt.imshow(I_orig)
-    plt.figure()
+    plt.figure("reconstructed")
     plt.imshow(I_recon)
     plt.show()

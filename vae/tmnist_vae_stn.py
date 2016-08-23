@@ -62,7 +62,7 @@ batch_size = 100
 n_train_batches = len(train_x)/batch_size
 n_test_batches = len(test_x)/batch_size
 
-n_epochs = 10
+n_epochs = 30
 with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
     for i in range(n_epochs):

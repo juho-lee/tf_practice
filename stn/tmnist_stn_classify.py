@@ -12,8 +12,13 @@ pool = layers.max_pool2d
 fc = layers.fully_connected
 bn = layers.batch_norm
 
-x = tf.placeholder(tf.float32, [None, 60*60])
-x_tensor = tf.reshape(x, [-1, 60, 60, 1])
+h = 60
+w = 60
+h_trans = 20
+w_trans = 20
+
+x = tf.placeholder(tf.float32, [None, h*w])
+x_tensor = tf.reshape(x, [-1, h, w, 1])
 y = tf.placeholder(tf.int32, [None])
 y_one_hot = layers.one_hot_encoding(y, 10)
 
@@ -38,7 +43,7 @@ loc = fc(fc(x, 500), 50)
 loc = loc_last(loc)
 
 # classification net
-trans = spatial_transformer(x_tensor, loc, [15, 15])
+trans = spatial_transformer(x_tensor, loc, [h_trans, w_trans])
 cl = conv(trans, 32, [3, 3], padding='VALID')
 cl = pool(cl, [2, 2])
 cl = conv(trans, 32, [3, 3], padding='VALID')
@@ -61,7 +66,7 @@ batch_size = 100
 n_train_batches = len(train_x)/batch_size
 n_test_batches = len(test_x)/batch_size
 
-n_epochs = 10
+n_epochs = 3
 with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
     for i in range(n_epochs):
@@ -86,8 +91,8 @@ with tf.Session() as sess:
         print "Epoch %d (%f sec), train acc %f, test acc %f" \
                 % (i+1, time.time()-start, train_acc, test_acc)
 
+    I_orig = batchmat_to_tileimg(test_x[0:batch_size], (h, w), (10, 10))
     attended = sess.run(trans, {x:test_x[0:batch_size]})
-    I_orig = batchmat_to_tileimg(test_x[0:batch_size], (60, 60), (10, 10))
     I_attn = batchimg_to_tileimg(attended, (10, 10), channel_dim=3)
 
     plt.figure('original')
