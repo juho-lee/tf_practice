@@ -6,13 +6,18 @@ import time
 from utils.image import batchmat_to_tileimg, gen_grid
 import matplotlib.pyplot as plt
 import seaborn as sns
+from attention import AttentionUnit
 
-n_hid = 300
+n_hid = 500
 n_lat = 20
 n_fac = 10
+N = 5
+attunit = AttentionUnit([1, 28, 28], N)
 
 x = tf.placeholder(tf.float32, shape=[None, 784])
-h_enc = fc(x, n_hid)
+h_enc_att = fc(x, n_hid)
+x_att = attunit.read_multiple(x, h_enc_att, n_fac)
+h_enc = fc(tf.concat(1, [x_att, h_enc_att]), n_hid)
 z_mean = fc(h_enc, n_lat, activation_fn=None)
 z_log_var = fc(h_enc, n_lat, activation_fn=None)
 z = gaussian_sample(z_mean, z_log_var)
@@ -21,7 +26,7 @@ w_log_var = fc(h_enc, n_fac, activation_fn=None)
 w = rect_gaussian_sample(w_mean, w_log_var)
 
 h_dec = fc(z, n_hid)
-P = fc(h_dec, n_fac*784, activation_fn=None)
+P = attunit.write_multiple(h_dec, n_fac)
 p = tf.slice(w, [0,0], [-1,1]) * tf.slice(P, [0,0], [-1,784])
 for i in range(1, n_fac):
     p = p + tf.slice(w, [0,i], [-1,1]) * tf.slice(P, [0,784*i], [-1,784])
@@ -38,7 +43,7 @@ batch_size = 100
 n_train_batches = mnist.train.num_examples / batch_size
 n_test_batches = mnist.test.num_examples / batch_size
 
-n_epochs = 30
+n_epochs = 10
 with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
     for i in range(n_epochs):

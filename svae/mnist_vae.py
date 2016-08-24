@@ -73,8 +73,9 @@ with tf.Session() as sess:
     plt.figure('generated')
     plt.gray()
     plt.axis('off')
-    eps = gen_grid(2, 10) if n_lat == 2 \
-            else np.random.normal(size=(100, n_lat))
+    eps = np.zeros((10*10, n_lat))
+    for i in range(10):
+        eps[i*10:(i+1)*10, i*2:(i+1)*2] = 5*np.random.normal(size=(10, 2))
     p_gen = sess.run(p, {z:eps})
     plt.imshow(batchmat_to_tileimg(p_gen, (28, 28), (10, 10)))
 
