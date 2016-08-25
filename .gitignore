@@ -1,5 +1,3 @@
-data/*
-results/*
 *.pyc
 *.pickle
 *.pkl
