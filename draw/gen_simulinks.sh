@@ -1,2 +1,2 @@
 ln -s ../../data
-ln -s ../../utils
+ln -s ../utils

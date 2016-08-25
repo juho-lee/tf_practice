@@ -86,7 +86,7 @@ if __name__ == "__main__":
     n_in = np.prod(image_shape)
     n_hid = 256
     n_lat = 20
-    n_step = 10
+    n_step = 20
     model = DRAW(image_shape, N, n_hid, n_lat, n_step)
     x = tf.placeholder(tf.float32, [None, n_in])
     L_x, L_z, dec_x = model.get_output(x)

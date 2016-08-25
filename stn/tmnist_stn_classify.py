@@ -12,10 +12,10 @@ pool = layers.max_pool2d
 fc = layers.fully_connected
 bn = layers.batch_norm
 
-h = 60
-w = 60
-h_trans = 20
-w_trans = 20
+h = 50
+w = 50
+h_trans = 15
+w_trans = 15
 
 x = tf.placeholder(tf.float32, [None, h*w])
 x_tensor = tf.reshape(x, [-1, h, w, 1])

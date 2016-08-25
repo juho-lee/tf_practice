@@ -7,9 +7,9 @@ from utils.image import batchmat_to_tileimg, gen_grid
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-n_hid = 300
-n_lat = 20
-n_fac = 10
+n_hid = 500
+n_lat = 40
+n_fac = 15
 
 x = tf.placeholder(tf.float32, shape=[None, 784])
 h_enc = fc(x, n_hid)
@@ -38,7 +38,7 @@ batch_size = 100
 n_train_batches = mnist.train.num_examples / batch_size
 n_test_batches = mnist.test.num_examples / batch_size
 
-n_epochs = 30
+n_epochs = 20
 with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
     for i in range(n_epochs):
