@@ -1,7 +1,11 @@
 import tensorflow as tf
 fc = tf.contrib.layers.fully_connected
+conv = tf.contrib.layers.convolution2d
+pool = tf.contrib.layers.max_pool2d
+deconv = tf.contrib.layers.convolution2d_transpose
+flat = tf.contrib.layers.flatten
+
 from prob import *
-from attention import AttentionUnit
 import time
 from utils.data import load_pkl
 from utils.image import batchmat_to_tileimg
@@ -9,24 +13,23 @@ import matplotlib.pyplot as plt
 
 h = 50
 w = 50
-N = 20
-n_hid = 300
 n_lat = 20
-attunit = AttentionUnit([1, h, w], N)
 
-
-
-"""
 x = tf.placeholder(tf.float32, [None, h*w])
-h_enc_att = fc(x, n_hid)
-x_att = attunit.read(x, h_enc_att)
-h_enc = fc(tf.concat(1, [x_att, h_enc_att]), n_hid)
+x_img = tf.reshape(x, [-1, h, w, 1])
+h_enc = pool(conv(x_img, 4, [3, 3]), [2, 2])
+h_enc = pool(conv(h_enc, 8, [3, 3]), [2, 2])
+h_enc = pool(conv(h_enc, 16, [3, 3]), [2, 2])
+h_enc = pool(conv(h_enc, 32, [3, 3]), [2, 2])
+h_enc = flat(h_enc)
 z_mean = fc(h_enc, n_lat, activation_fn=None)
 z_log_var = fc(h_enc, n_lat, activation_fn=None)
 z = gaussian_sample(z_mean, z_log_var)
-h_dec = fc(z, n_hid)
-p = tf.nn.sigmoid(attunit.write(h_dec))
-"""
+h_dec = tf.reshape(fc(z, 32*3*3), [-1, 3, 3, 32])
+h_dec = deconv(h_dec, 16, [2, 2], [2, 2])
+h_dec = deconv(h_dec, 8, [2, 2], [2, 2])
+h_dec = deconv(h_dec, 4, [3, 3], [2, 2], padding='VALID')
+p = flat(deconv(h_dec, 1, [2, 2], [2, 2], activation_fn=tf.nn.sigmoid))
 
 neg_ll = bernoulli_neg_ll(x, p)
 kld = gaussian_kld(z_mean, z_log_var)
@@ -82,9 +85,10 @@ with tf.Session() as sess:
     p_recon = sess.run(p, {x:test_x[0:100]})
     plt.imshow(batchmat_to_tileimg(p_recon, (h, w), (10, 10)))
 
-    plt.figure('attended')
+    plt.figure('generated')
     plt.gray()
     plt.axis('off')
-    p_att = sess.run(x_att, {x:test_x[0:100]})
-    plt.imshow(batchmat_to_tileimg(p_att, (N, N), (10, 10)))
+    p_gen = sess.run(p, {z:np.random.normal(size=(100, n_lat))})
+    plt.imshow(batchmat_to_tileimg(p_gen, (h, w), (10, 10)))
+
     plt.show()

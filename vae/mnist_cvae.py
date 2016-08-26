@@ -1,20 +1,30 @@
 import tensorflow as tf
 fc = tf.contrib.layers.fully_connected
+conv = tf.contrib.layers.convolution2d
+pool = tf.contrib.layers.max_pool2d
+deconv = tf.contrib.layers.convolution2d_transpose
+flat = tf.contrib.layers.flatten
 from prob import *
 from tensorflow.examples.tutorials.mnist import input_data
 import time
 from utils.image import batchmat_to_tileimg, gen_grid
 import matplotlib.pyplot as plt
 
-n_hid = 200
 n_lat = 20
 x = tf.placeholder(tf.float32, shape=[None, 784])
-h_enc = fc(x, n_hid)
+x_img = tf.reshape(x, [-1, 28, 28, 1])
+h_enc = pool(conv(x_img, 4, [3, 3]), [2, 2])
+h_enc = pool(conv(h_enc, 8, [3, 3]), [2, 2])
+h_enc = pool(conv(h_enc, 16, [3, 3]), [2, 2])
+h_enc = flat(h_enc)
 z_mean = fc(h_enc, n_lat, activation_fn=None)
 z_log_var = fc(h_enc, n_lat, activation_fn=None)
 z = gaussian_sample(z_mean, z_log_var)
-h_dec = fc(z, n_hid)
-p = fc(h_dec, 784, activation_fn=tf.nn.sigmoid)
+h_dec = fc(z, 144)
+h_dec = tf.reshape(h_dec, [-1, 3, 3, 16])
+h_dec = deconv(h_dec, 8, [3, 3], [2, 2], padding='VALID')
+h_dec = deconv(h_dec, 4, [2, 2], [2, 2])
+p = flat(deconv(h_dec, 1, [2, 2], [2, 2], activation_fn=tf.nn.sigmoid))
 
 neg_ll = bernoulli_neg_ll(x, p)
 kld = gaussian_kld(z_mean, z_log_var)
@@ -73,10 +83,12 @@ with tf.Session() as sess:
     plt.figure('generated')
     plt.gray()
     plt.axis('off')
+    eps = np.random.normal(size=(100, n_lat))
+    """
     eps = np.zeros((10*10, n_lat))
     for i in range(10):
         eps[i*10:(i+1)*10, i*2:(i+1)*2] = 5*np.random.normal(size=(10, 2))
+    """
     p_gen = sess.run(p, {z:eps})
     plt.imshow(batchmat_to_tileimg(p_gen, (28, 28), (10, 10)))
-
     plt.show()

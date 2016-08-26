@@ -20,10 +20,10 @@ def batchmat_to_tileimg(X, img_shape, tile_shape):
                 j*img_shape[1]:(j+1)*img_shape[1]] = 255*cell
     return PIL.Image.fromarray(fig)
 
-def batchimg_to_tileimg(X, tile_shape, channel_dim=1):
+def batchimg_to_tileimg(X, tile_shape, channel_dim=3):
     assert(np.prod(tile_shape) >= len(X))
     assert(X.ndim == 4)
-    assert(channel_dim==1 | channel_dim==3)
+    assert(channel_dim==1 or channel_dim==3)
     if channel_dim==3:
         X = X.transpose([0,3,1,2])
     img_shape = X.shape[2:]

@@ -84,19 +84,19 @@ def loc_last(input):
         weights_initializer=W_init,
         biases_initializer=b_init)
 
-if __name__ == '__main__':
+if __name__ == '__main__':  
     from scipy import ndimage
     import matplotlib.pyplot as plt
     U = ndimage.imread('gong13.jpg')
     height, width, num_channels = U.shape
     U = U / 255.
     U = U.reshape(1, height, width, num_channels).astype('float32')
-    theta = np.array([[1.,0.,0],[0,3.,0]]).reshape(1, 6)
+    theta = np.array([[3.,1.,0],[1.,3.,0]]).reshape(1, 6)
 
-    U_ = tf.placeholder(tf.float32, [None, height, width, num_channels])
-    theta_ = tf.placeholder(tf.float32, [None, 6])
-    out_size = [5*height, 5*width]
-    T_ = spatial_transformer(U_, theta_, out_size)
+    U_ = tf.placeholder(tf.float32, [1, height, width, num_channels])
+    theta_ = tf.placeholder(tf.float32, [1, 6])
+    out_size = [3*height, 3*width]
+    T_ = inv_spatial_transformer(U_, theta_, out_size)
 
     with tf.Session() as sess:
         T = sess.run(T_, {U_:U, theta_:theta})
