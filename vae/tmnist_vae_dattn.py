@@ -4,36 +4,29 @@ flat = tf.contrib.layers.flatten
 from prob import *
 import time
 from utils.data import load_pkl
-from utils.image import batchmat_to_tileimg, batchimg_to_tileimg
+from utils.image import batchmat_to_tileimg
 import matplotlib.pyplot as plt
-from stn.spatial_transformer import spatial_transformer, loc_last
+from stn.draw_attn import *
 
-h = 50
-w = 50
+height = 50
+width = 50
+N = 30
 n_hid = 800
-n_lat = 20
-h_att = 20
-w_att = 20
+n_lat = 30
 
-x = tf.placeholder(tf.float32, [None, h*w])
-x_img = tf.reshape(x, [-1, h, w, 1])
-loc_enc = loc_last(fc(fc(x, n_hid), n_hid/10))
-x_att = spatial_transformer(x_img, loc_enc, [h_att, w_att])
-h_enc = fc(tf.concat(1, [loc_enc, flat(x_att)]), n_hid)
-z_mean = fc(h_enc, n_lat, activation_fn=None)
-z_log_var = fc(h_enc, n_lat, activation_fn=None)
+attunit = AttentionUnit(height, width, 1, N)
+x = tf.placeholder(tf.float32, [None, height*width])
+att_enc = fc(fc(fc(x, n_hid/10), n_hid), 5, activation_fn=None)
+x_att = attunit.read(x, att_enc)
+hid_enc = fc(tf.concat(1, [att_enc, x_att]), n_hid)
+z_mean = fc(hid_enc, n_lat, activation_fn=None)
+z_log_var = fc(hid_enc, n_lat, activation_fn=None)
 z = gaussian_sample(z_mean, z_log_var)
 
-h_dec = fc(z, n_hid)
-loc_dec = loc_last(fc(h_dec, n_hid/10))
-
-"""
-p_att = tf.reshape(fc(h_dec, h_att*w_att, activation_fn=tf.nn.tanh), [-1, h_att, w_att, 1])
-p = flat(tf.nn.sigmoid(spatial_transformer(p_att, loc_dec, [h, w])))
-"""
-p_att = tf.reshape(fc(h_dec, h_att*w_att, activation_fn=tf.nn.sigmoid), [-1, h_att, w_att, 1])
-p = tf.clip_by_value(spatial_transformer(p_att, loc_dec, [h, w]), 0, 1)
-p = flat(p)
+hid_dec = fc(z, n_hid)
+att_dec = fc(fc(hid_dec, n_hid/10), 5, activation_fn=None)
+p_att = fc(hid_dec, N*N, activation_fn=None)
+p = tf.nn.sigmoid(attunit.write(p_att, att_dec))
 
 neg_ll = bernoulli_neg_ll(x, p)
 kld = gaussian_kld(z_mean, z_log_var)
@@ -47,7 +40,7 @@ batch_size = 100
 n_train_batches = len(train_x) / batch_size
 n_test_batches = len(test_x) / batch_size
 
-n_epochs = 1
+n_epochs = 50
 sess = tf.Session()
 sess.run(tf.initialize_all_variables())
 for i in range(n_epochs):
@@ -81,35 +74,35 @@ for i in range(n_epochs):
 plt.figure('original')
 plt.gray()
 plt.axis('off')
-plt.imshow(batchmat_to_tileimg(test_x[0:100], (h, w), (10, 10)))
+plt.imshow(batchmat_to_tileimg(test_x[0:100], (height, width), (10, 10)))
 
 plt.figure('reconstructed')
 plt.gray()
 plt.axis('off')
-recon_att, recon = sess.run([p_att, p], {x:test_x[0:100]})
-plt.imshow(batchmat_to_tileimg(recon, (h, w), (10, 10)))
+recon_att, recon = sess.run([tf.nn.sigmoid(p_att), p], {x:test_x[0:100]})
+plt.imshow(batchmat_to_tileimg(recon, (height, width), (10, 10)))
 
 plt.figure('reconstructed_attended')
 plt.gray()
 plt.axis('off')
-plt.imshow(batchimg_to_tileimg(recon_att, (10, 10)))
+plt.imshow(batchmat_to_tileimg(recon_att, (N, N), (10, 10)))
 
 plt.figure('attended')
 plt.gray()
 plt.axis('off')
 att = sess.run(x_att, {x:test_x[0:100]})
-plt.imshow(batchimg_to_tileimg(att, (10, 10)))
+plt.imshow(batchmat_to_tileimg(att, (N, N), (10, 10)))
 
 plt.figure('generated')
 plt.gray()
 plt.axis('off')
-gen_att, gen = sess.run([p_att, p], {z:np.random.normal(size=(100, n_lat))})
-plt.imshow(batchmat_to_tileimg(gen, (h, w), (10, 10)))
+gen_att, gen = sess.run([tf.nn.sigmoid(p_att), p], {z:np.random.normal(size=(100, n_lat))})
+plt.imshow(batchmat_to_tileimg(gen, (height, width), (10, 10)))
 
 plt.figure('generated_attended')
 plt.gray()
 plt.axis('off')
-plt.imshow(batchimg_to_tileimg(gen_att, (10, 10)))
+plt.imshow(batchmat_to_tileimg(gen_att, (N, N), (10, 10)))
 
 plt.show()
 
