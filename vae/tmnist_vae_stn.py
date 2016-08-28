@@ -15,7 +15,7 @@ n_lat = 20
 h_att = 20
 w_att = 20
 
-x = tf.placeholder(tf.float32, [100, h*w])
+x = tf.placeholder(tf.float32, [None, h*w])
 x_img = tf.reshape(x, [-1, h, w, 1])
 loc_enc = loc_last(fc(fc(x, n_hid), n_hid/10))
 x_att = spatial_transformer(x_img, loc_enc, [h_att, w_att])
@@ -26,14 +26,14 @@ z = gaussian_sample(z_mean, z_log_var)
 
 h_dec = fc(z, n_hid)
 loc_dec = loc_last(fc(h_dec, n_hid/10))
+
+"""
+p_att = tf.reshape(fc(h_dec, h_att*w_att, activation_fn=tf.nn.tanh), [-1, h_att, w_att, 1])
+p = flat(tf.nn.sigmoid(spatial_transformer(p_att, loc_dec, [h, w])))
+"""
 p_att = tf.reshape(fc(h_dec, h_att*w_att, activation_fn=tf.nn.sigmoid), [-1, h_att, w_att, 1])
 p = tf.clip_by_value(spatial_transformer(p_att, loc_dec, [h, w]), 0, 1)
 p = flat(p)
-
-"""
-h_dec = fc(z, n_hid)
-p = fc(h_dec, h*w, activation_fn=tf.nn.sigmoid)
-"""
 
 neg_ll = bernoulli_neg_ll(x, p)
 kld = gaussian_kld(z_mean, z_log_var)
@@ -47,8 +47,7 @@ batch_size = 100
 n_train_batches = len(train_x) / batch_size
 n_test_batches = len(test_x) / batch_size
 
-n_epochs = 30
-#with tf.Session() as sess:
+n_epochs = 1
 sess = tf.Session()
 sess.run(tf.initialize_all_variables())
 for i in range(n_epochs):

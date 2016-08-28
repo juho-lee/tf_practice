@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 n_hid = 500
-n_lat = 40
-n_fac = 15
+n_lat = 20
+n_fac = 10
 
 x = tf.placeholder(tf.float32, shape=[None, 784])
 h_enc = fc(x, n_hid)

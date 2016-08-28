@@ -1,23 +1,28 @@
 import tensorflow as tf
 fc = tf.contrib.layers.fully_connected
+flat = tf.contrib.layers.flatten
 from prob import *
 from tensorflow.examples.tutorials.mnist import input_data
 import time
+from stn.spatial_transformer import spatial_transformer, loc_last
 from utils.image import batchmat_to_tileimg, gen_grid
 import matplotlib.pyplot as plt
 import seaborn as sns
-from attention import AttentionUnit
 
-n_hid = 500
+n_hid = 400
 n_lat = 20
-n_fac = 10
-N = 5
-attunit = AttentionUnit([1, 28, 28], N)
+n_fac = 5
 
-x = tf.placeholder(tf.float32, shape=[None, 784])
-h_enc_att = fc(x, n_hid)
-x_att = attunit.read_multiple(x, h_enc_att, n_fac)
-h_enc = fc(tf.concat(1, [x_att, h_enc_att]), n_hid)
+x = tf.placeholder(tf.float32, shape=[None, 28*28])
+x_img = tf.reshape(x, [-1, 28, 28, 1])
+h_enc_att = fc(fc(x, n_hid), n_hid/10)
+loc_enc = loc_last(h_enc_att)
+x_att = flat(spatial_transformer(x_img, loc_enc, [5, 5]))
+for i in range(1, n_fac):
+    loc_enc = loc_last(h_enc_att)
+    x_att = tf.concat(1, 
+        [x_att, flat(spatial_transformer(x_img, loc_enc, [5, 5]))])
+h_enc = fc(tf.concat(1, [loc_enc, x_att]), n_hid)
 z_mean = fc(h_enc, n_lat, activation_fn=None)
 z_log_var = fc(h_enc, n_lat, activation_fn=None)
 z = gaussian_sample(z_mean, z_log_var)
@@ -26,11 +31,17 @@ w_log_var = fc(h_enc, n_fac, activation_fn=None)
 w = rect_gaussian_sample(w_mean, w_log_var)
 
 h_dec = fc(z, n_hid)
-P = attunit.write_multiple(h_dec, n_fac)
-p = tf.slice(w, [0,0], [-1,1]) * tf.slice(P, [0,0], [-1,784])
+h_dec_att = fc(h_dec, n_hid/10)
+loc_dec = loc_last(h_dec_att)
+p_att = tf.slice(w, [0,0], [-1,1]) * fc(h_dec, 5*5, activation_fn=None)
+p_att = tf.reshape(tf.nn.sigmoid(p_att), [-1, 5, 5, 1])
+p = spatial_transformer(p_att, loc_dec, [28, 28])
 for i in range(1, n_fac):
-    p = p + tf.slice(w, [0,i], [-1,1]) * tf.slice(P, [0,784*i], [-1,784])
-p = tf.nn.sigmoid(p)
+    loc_dec = loc_last(h_dec_att)
+    p_att = tf.slice(w, [0,i], [-1,1]) * fc(h_dec, 5*5, activation_fn=None)
+    p_att = tf.reshape(tf.nn.sigmoid(p_att), [-1, 5, 5, 1])
+    p = p + spatial_transformer(p_att, loc_dec, [28, 28])
+p = flat(tf.clip_by_value(p, 0, 1))
 
 neg_ll = bernoulli_neg_ll(x, p)
 kld_w = rect_gaussian_kld(w_mean, w_log_var, mean0=-1.)
@@ -43,7 +54,7 @@ batch_size = 100
 n_train_batches = mnist.train.num_examples / batch_size
 n_test_batches = mnist.test.num_examples / batch_size
 
-n_epochs = 10
+n_epochs = 30
 with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
     for i in range(n_epochs):
@@ -95,7 +106,7 @@ with tf.Session() as sess:
     plt.axis('off')
     p_recon = sess.run(p, {x:test_x})
     plt.imshow(batchmat_to_tileimg(p_recon, (28, 28), (10, 10)))
-
+    
     test_w = np.zeros((n_fac*n_fac, n_fac))
     for i in range(n_fac):
         test_w[i*n_fac:(i+1)*n_fac, i] = 1.0
@@ -115,5 +126,5 @@ with tf.Session() as sess:
         for i in range(batch_size):
             hist[batch_y[i], batch_w[i] > 0] += 1
     sns.heatmap(hist)
-
+    
     plt.show()

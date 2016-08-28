@@ -4,6 +4,7 @@ conv = tf.contrib.layers.convolution2d
 pool = tf.contrib.layers.max_pool2d
 deconv = tf.contrib.layers.convolution2d_transpose
 flat = tf.contrib.layers.flatten
+batch_norm = tf.contrib.layers.batch_norm
 from prob import *
 from tensorflow.examples.tutorials.mnist import input_data
 import time

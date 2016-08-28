@@ -54,21 +54,37 @@ def interpolate(U, x_s, y_s, out_height, out_width):
     output = tf.add_n([wa*Ia, wb*Ib, wc*Ic, wd*Id])
     return output
 
+def transform(U, grid_t, num_batch, out_height, out_width, num_channels):
+    x_s = tf.reshape(tf.slice(grid_t, [0,0,0], [-1,1,-1]), [-1])
+    y_s = tf.reshape(tf.slice(grid_t, [0,1,0], [-1,1,-1]), [-1])
+    return tf.reshape(
+            interpolate(U, x_s, y_s, out_height, out_width),
+            tf.pack([num_batch, out_height, out_width, num_channels]))
+
 def spatial_transformer(U, theta, out_size):
     num_batch = tf.shape(U)[0]
     height, width, num_channels = U.get_shape()[1:]
     out_height, out_width = out_size
-
     grid = tf.tile(tf.expand_dims(meshgrid(out_height, out_width), 0),
             [num_batch, 1, 1])
-
     grid_t = tf.batch_matmul(tf.reshape(theta, [-1, 2, 3]), grid)
-    x_s = tf.reshape(tf.slice(grid_t, [0,0,0], [-1,1,-1]), [-1])
-    y_s = tf.reshape(tf.slice(grid_t, [0,1,0], [-1,1,-1]), [-1])
+    return transform(U, grid_t, num_batch, out_height, out_width, num_channels)
 
-    return tf.reshape(
-            interpolate(U, x_s, y_s, out_height, out_width),
-            tf.pack([num_batch, out_height, out_width, num_channels]))
+def multiple_spatial_transformer(U, theta, num_st, out_size):
+    num_batch = tf.shape(U)[0]
+    height, width, num_channels = U.get_shape()[1:]
+    out_height, out_width = out_size
+    grid = tf.tile(tf.expand_dims(meshgrid(out_height, out_width), 0),
+            [num_batch, 1, 1])
+    grid_t = tf.batch_matmul(
+            tf.reshape(tf.slice(theta, [0,0], [-1,6]), [-1, 2, 3]), grid)
+    output = transform(U, grid_t, num_batch, out_height, out_width, num_channels)
+    for i in range(1, num_st):
+        grid_t = tf.batch_matmul(
+            tf.reshape(tf.slice(theta, [0,6*i], [-1,6]), [-1, 2, 3]), grid)
+        output = tf.concat(3, [output, 
+            transform(U, grid_t, num_batch, out_height, out_width, num_channels)])
+    return output          
 
 # last layer of localization net
 from tensorflow.contrib import layers
@@ -76,11 +92,21 @@ def loc_last(input):
     if len(input.get_shape()) == 4:
         input = layers.flatten(input)
     num_inputs = input.get_shape()[1]
-
     W_init = tf.constant_initializer(np.zeros((num_inputs, 6)))
     b_init = tf.constant_initializer(
             np.array([[1.,0,0],[0,1.,0]]).flatten())
     return layers.fully_connected(input, 6, activation_fn=None,
+        weights_initializer=W_init,
+        biases_initializer=b_init)
+
+def multiple_loc_last(input, num_st):
+    if len(input.get_shape()) == 4:
+        input = layers.flatten(input)
+    num_inputs = input.get_shape()[1]
+    W_init = tf.constant_initializer(np.zeros((num_inputs, 6*num_st)))
+    b_init = tf.constant_initializer(
+                tf.tile(np.array([[1.,0,0],[0,1.,0]]).flatten(), [1, num_st]))
+    return layers.fully_connected(input, 6*num_st, activation_fn=None,
         weights_initializer=W_init,
         biases_initializer=b_init)
 
@@ -91,14 +117,18 @@ if __name__ == '__main__':
     height, width, num_channels = U.shape
     U = U / 255.
     U = U.reshape(1, height, width, num_channels).astype('float32')
-    theta = np.array([[3.,1.,0],[1.,3.,0]]).reshape(1, 6)
+    theta = np.array([[4.,1,3],[0,4.,2]]).reshape(1, 6)
+    theta = np.concatenate([theta, np.array([[2.0,0,-1],[0,2.0,0]]).reshape(1, 6)], 1)
 
     U_ = tf.placeholder(tf.float32, [1, height, width, num_channels])
-    theta_ = tf.placeholder(tf.float32, [1, 6])
-    out_size = [3*height, 3*width]
-    T_ = inv_spatial_transformer(U_, theta_, out_size)
+    theta_ = tf.placeholder(tf.float32, [1, 12])
+    out_size = [height/2, width/2]
+    T_ = multiple_spatial_transformer(U_, theta_, 2, out_size)
 
     with tf.Session() as sess:
-        T = sess.run(T_, {U_:U, theta_:theta})
-        plt.imshow(T[0])
+        T = sess.run(T_, {U_:U, theta_:theta})        
+        plt.figure()
+        plt.imshow(T[0,:,:,0:3])
+        plt.figure()
+        plt.imshow(T[0,:,:,3:6])
         plt.show()
