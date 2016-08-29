@@ -4,3 +4,6 @@
 *.gz
 *.log
 *.npz.pyc
+*.ckpt
+*.meta
+checkpoint

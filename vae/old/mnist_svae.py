@@ -3,43 +3,28 @@ fc = tf.contrib.layers.fully_connected
 from prob import *
 from tensorflow.examples.tutorials.mnist import input_data
 import time
-from utils.image import batchmat_to_tileimg
-from stn.draw_attn import *
+from utils.image import batchmat_to_tileimg, gen_grid
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-height = 28
-width = 28
-N = 4
-attunit = AttentionUnit(height, width, 1, N)
-n_hid = 400
+n_hid = 500
 n_lat = 20
 n_fac = 10
 
 x = tf.placeholder(tf.float32, shape=[None, 784])
-att_enc = fc(fc(x, n_hid), 5*n_fac, activation_fn=None)
-x_att = attunit.read(x, tf.slice(att_enc, [0,0], [-1,5]))
-for i in range(1, n_fac):
-    x_att = tf.concat(1, [x_att,
-        attunit.read(x, tf.slice(att_enc, [0,5*i], [-1,5]))])
-hid_enc = fc(tf.concat(1, [att_enc, x_att]), n_hid)
-z_mean = fc(hid_enc, n_lat, activation_fn=None)
-z_log_var = fc(hid_enc, n_lat, activation_fn=None)
+h_enc = fc(x, n_hid)
+z_mean = fc(h_enc, n_lat, activation_fn=None)
+z_log_var = fc(h_enc, n_lat, activation_fn=None)
 z = gaussian_sample(z_mean, z_log_var)
-w_mean = fc(hid_enc, n_fac, activation_fn=None)
-w_log_var = fc(hid_enc, n_fac, activation_fn=None)
+w_mean = fc(h_enc, n_fac, activation_fn=None)
+w_log_var = fc(h_enc, n_fac, activation_fn=None)
 w = rect_gaussian_sample(w_mean, w_log_var)
 
-hid_dec = fc(z, n_hid)
-att_dec = fc(hid_dec, 5*n_fac, activation_fn=None)
-p_att = fc(hid_dec, N*N*n_fac, activation_fn=None)
-p = tf.slice(w, [0,0], [-1,1])*attunit.write(
-        tf.slice(p_att, [0,0], [-1,N*N]),
-        tf.slice(att_dec, [0,0], [-1,5]))
+h_dec = fc(z, n_hid)
+P = fc(h_dec, n_fac*784, activation_fn=None)
+p = tf.slice(w, [0,0], [-1,1]) * tf.slice(P, [0,0], [-1,784])
 for i in range(1, n_fac):
-    p = p + tf.slice(w, [0,i], [-1,1])*attunit.write(
-            tf.slice(p_att, [0,N*N*i], [-1,N*N]),
-            tf.slice(att_dec, [0,5*i], [-1,5]))
+    p = p + tf.slice(w, [0,i], [-1,1]) * tf.slice(P, [0,784*i], [-1,784])
 p = tf.nn.sigmoid(p)
 
 neg_ll = bernoulli_neg_ll(x, p)

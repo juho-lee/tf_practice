@@ -38,41 +38,71 @@ class AttentionUnit(object):
             F_y = tf.tile(F_y, [self.num_ch, 1, 1])
         return F_x, F_y
 
+    def _read(self, x, F_xt, F_y, gamma):
+        return tf.reshape(tf.batch_matmul(F_y, tf.batch_matmul(
+            tf.reshape(x, [-1,self.height,self.width]), F_xt)),
+            [-1,self.read_dim])*tf.reshape(gamma, [-1,1])
+
+    def _write(self, w, F_x, F_y, gamma):
+        return tf.reshape(tf.batch_matmul(tf.transpose(F_y, [0,2,1]),
+            tf.batch_matmul(tf.reshape(w, [-1,self.N,self.N]), F_x)),
+            [-1,self.write_dim])*tf.reshape(1./gamma, [-1,1])
+
+
     def read(self, x, att):
         g_x, g_y, sigma, delta, gamma = self.get_att_params(att)
         F_x, F_y = self.get_filterbanks(g_x, g_y, sigma, delta)
         F_xt = tf.transpose(F_x, [0,2,1])
-
-        def _read(x):
-            return tf.reshape(tf.batch_matmul(F_y, tf.batch_matmul(
-                tf.reshape(x, [-1,self.height,self.width]), F_xt)),
-                [-1,self.read_dim]) * tf.reshape(gamma, [-1,1])
-
         if type(x) is list:
-            out = _read(x[0])
+            out = self._read(x[0], F_xt, F_y, gamma)
             for i in range(1, len(x)):
-                out = tf.concat(1, [out, _read(x[i])])
+                out = tf.concat(1, [out, self._read(x[i], F_xt, F_y, gamma)])
         else:
-            out = _read(x)
+            out = self._read(x, F_xt, F_y, gamma)
         return out
 
     def write(self, w, att):
         g_x, g_y, sigma, delta, gamma = self.get_att_params(att)
         F_x, F_y = self.get_filterbanks(g_x, g_y, sigma, delta)
-        
-        def _write(w):
-            return tf.reshape(tf.batch_matmul(tf.transpose(F_y, [0,2,1]),
-                tf.batch_matmul(tf.reshape(w, [-1,self.N,self.N]), F_x)),
-                [-1,self.write_dim]) * tf.reshape(1./gamma, [-1,1])
-
         if type(w) is list:
-            out = _write(w[0])
+            out = self._write(w[0], F_x, F_y, gamma)
             for i in range(1, len(w)):
-                out = tf.concat(1, [out, _write(w[i])])
+                out = tf.concat(1, [out, self._write(w[i], F_x, F_y, gamma)])
         else:
-            out = _write(w)
+            out = self._write(w, F_x, F_y, gamma)
         return out
- 
+
+    def read_multiple(self, x, att, n_att):
+        assert(att.get_shape()[1]/5 == n_att)
+        g_x, g_y, sigma, delta, gamma = \
+                self.get_att_params(tf.slice(att, [0,0], [-1,5]))
+        F_x, F_y = self.get_filterbanks(g_x, g_y, sigma, delta)
+        F_xt = tf.transpose(F_x, [0,2,1])
+        out = self._read(x, F_xt, F_y, gamma)
+        for i in range(1, n_att):
+            g_x, g_y, sigma, delta, gamma = \
+                    self.get_att_params(tf.slice(att, [0,5*i], [-1,5]))
+            F_x, F_y = self.get_filterbanks(g_x, g_y, sigma, delta)
+            F_xt = tf.transpose(F_x, [0,2,1])
+            out = tf.concat(1, [out, self._read(x, F_xt, F_y, gamma)])
+        return out
+
+    def write_multiple(self, w, att, n_att):
+        assert(w.get_shape()[1]/self.read_dim == n_att)
+        assert(att.get_shape()[1]/5 == n_att)
+        g_x, g_y, sigma, delta, gamma = \
+                self.get_att_params(tf.slice(att, [0,0], [-1,5]))
+        F_x, F_y = self.get_filterbanks(g_x, g_y, sigma, delta)
+        out = self._write(tf.slice(w, [0,0], [-1,self.read_dim]), F_x, F_y, gamma)
+        for i in range(1, n_att):
+            g_x, g_y, sigma, delta, gamma = \
+                    self.get_att_params(tf.slice(att, [0,5*i], [-1,5]))
+            F_x, F_y = self.get_filterbanks(g_x, g_y, sigma, delta)
+            out = tf.concat(1, [out, self._write(
+                tf.slice(w, [0,self.read_dim*i], [-1,self.read_dim]),
+                F_x, F_y, gamma)])
+        return out
+
 if __name__ == '__main__':
     from PIL import Image
     import pylab
@@ -92,13 +122,13 @@ if __name__ == '__main__':
     def imagify(flat, height, width):
         image = flat.reshape([3, height, width]).transpose([1, 2, 0])
         return image / image.max()
-    
+
     sess = tf.Session()
     pylab.figure('original')
     pylab.imshow(imagify(I, height, width), interpolation='nearest')
 
     pylab.figure('read')
-    I_read_run, I_write_run = sess.run([I_read, I_write], 
+    I_read_run, I_write_run = sess.run([I_read, I_write],
             {att: np.array([[0.3, 0.2, np.log(3.), np.log(2.), np.log(1.)]])})
     pylab.imshow(imagify(I_read_run, N, N), interpolation='nearest')
 
@@ -106,20 +136,3 @@ if __name__ == '__main__':
     pylab.imshow(imagify(I_write_run, height, width), interpolation='nearest')
 
     pylab.show(block=True)
-
-                
-
-
-
-    
-
-            
- 
-
-
-
-
-
-
-    
-

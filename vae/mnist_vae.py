@@ -1,82 +1,119 @@
 import tensorflow as tf
-fc = tf.contrib.layers.fully_connected
-from prob import *
 from tensorflow.examples.tutorials.mnist import input_data
+from prob import *
+from utils.nn import *
+from utils.image import batchmat_to_tileimg
 import time
-from utils.image import batchmat_to_tileimg, gen_grid
+import os
 import matplotlib.pyplot as plt
 
-n_hid = 200
-n_lat = 20
-x = tf.placeholder(tf.float32, shape=[None, 784])
+FLAGS = tf.app.flags.FLAGS
+tf.app.flags.DEFINE_string('save_dir', 'results/mnist/vae',
+        """directory to save models.""")
+tf.app.flags.DEFINE_integer('n_epochs', 20,
+        """number of epochs to run""")
+tf.app.flags.DEFINE_integer('n_hid', 200,
+        """number of hidden units""")
+tf.app.flags.DEFINE_integer('n_lat', 20,
+        """number of latent variables""")
+tf.app.flags.DEFINE_boolean('train', True,
+        """training (True) vs testing (False)""")
+
+if not os.path.isdir(FLAGS.save_dir):
+    os.makedirs(FLAGS.save_dir)
+
+n_hid = FLAGS.n_hid
+n_lat = FLAGS.n_lat
+height = 28
+width = 28
+n_in = height*width
+x = tf.placeholder(tf.float32, shape=[None, n_in])
 h_enc = fc(x, n_hid)
-z_mean = fc(h_enc, n_lat, activation_fn=None)
-z_log_var = fc(h_enc, n_lat, activation_fn=None)
+z_mean = linear(h_enc, n_lat)
+z_log_var = linear(h_enc, n_lat)
 z = gaussian_sample(z_mean, z_log_var)
 h_dec = fc(z, n_hid)
-p = fc(h_dec, 784, activation_fn=tf.nn.sigmoid)
-
-neg_ll = bernoulli_neg_ll(x, p)
-kld = gaussian_kld(z_mean, z_log_var)
-loss = neg_ll + kld
-train_step = tf.train.AdamOptimizer().minimize(loss)
+p = fc(h_dec, n_in, activation_fn=tf.nn.sigmoid)
 
 mnist = input_data.read_data_sets("data/mnist")
 batch_size = 100
 n_train_batches = mnist.train.num_examples / batch_size
-n_test_batches = mnist.test.num_examples / batch_size
+n_valid_batches = mnist.validation.num_examples / batch_size
 
-n_epochs = 20
-with tf.Session() as sess:
+neg_ll = bernoulli_neg_ll(x, p)
+kld = gaussian_kld(z_mean, z_log_var)
+loss = neg_ll + kld
+train_op = tf.train.AdamOptimizer().minimize(loss)
+saver = tf.train.Saver()
+sess = tf.Session()
+
+def train():
+    logfile = open(FLAGS.save_dir + '/train.log', 'w', 0)
+    logfile.write(('n_in: %d, n_hid: %d, n_lat: %d\n' % (n_in, n_hid, n_lat)))
     sess.run(tf.initialize_all_variables())
-    for i in range(n_epochs):
+    for i in range(FLAGS.n_epochs):
         start = time.time()
         train_neg_ll = 0.
         train_kld = 0.
         for j in range(n_train_batches):
             batch_x, _ = mnist.train.next_batch(batch_size)
             _, batch_neg_ll, batch_kld = \
-                    sess.run([train_step, neg_ll, kld], feed_dict={x:batch_x})
+                    sess.run([train_op, neg_ll, kld], {x:batch_x})
             train_neg_ll += batch_neg_ll
             train_kld += batch_kld
         train_neg_ll /= n_train_batches
         train_kld /= n_train_batches
 
-        test_neg_ll = 0.
-        test_kld = 0.
-        for j in range(n_test_batches):
-            batch_x, _ = mnist.test.next_batch(batch_size)
-            batch_neg_ll, batch_kld = \
-                    sess.run([neg_ll, kld], feed_dict={x:batch_x})
-            test_neg_ll += batch_neg_ll
-            test_kld += batch_kld
-        test_neg_ll /= n_test_batches
-        test_kld /= n_test_batches
+        valid_neg_ll = 0.
+        valid_kld = 0.
+        for j in range(n_valid_batches):
+            batch_x, _ = mnist.validation.next_batch(batch_size)
+            batch_neg_ll, batch_kld = sess.run([neg_ll, kld], {x:batch_x})
+            valid_neg_ll += batch_neg_ll
+            valid_kld += batch_kld
+        valid_neg_ll /= n_valid_batches
+        valid_kld /= n_valid_batches
 
-        print "Epoch %d (%f sec), train loss %f = %f + %f, test loss %f = %f + %f" \
+        line = "Epoch %d (%f sec), train loss %f = %f + %f, valid loss %f = %f + %f" \
                 % (i+1, time.time()-start,
-                    train_neg_ll+train_kld, train_neg_ll, train_kld,
-                    test_neg_ll+test_kld, test_neg_ll, test_kld)
+                        train_neg_ll+train_kld, train_neg_ll, train_kld,
+                        valid_neg_ll+valid_kld, valid_neg_ll, valid_kld)
+        print line
+        logfile.write(line + '\n')
+    logfile.close()
+    saver.save(sess, FLAGS.save_dir+'/model.ckpt')
 
-    test_x, _ = mnist.test.next_batch(100)
-    plt.figure('original')
+def test():
+    saver.restore(sess, FLAGS.save_dir+'/model.ckpt')
+    batch_x, _ = mnist.test.next_batch(batch_size)
+    fig = plt.figure('original')
     plt.gray()
     plt.axis('off')
-    plt.imshow(batchmat_to_tileimg(test_x, (28, 28), (10, 10)))
+    plt.imshow(batchmat_to_tileimg(batch_x, (height, width), (10, 10)))
+    fig.savefig(FLAGS.save_dir+'/original.png')
 
-    plt.figure('reconstructed')
+    fig = plt.figure('reconstructed')
     plt.gray()
     plt.axis('off')
-    p_recon = sess.run(p, {x:test_x})
-    plt.imshow(batchmat_to_tileimg(p_recon, (28, 28), (10, 10)))
+    p_recon = sess.run(p, {x:batch_x})
+    plt.imshow(batchmat_to_tileimg(p_recon, (height, width), (10, 10)))
+    fig.savefig(FLAGS.save_dir+'/reconstructed.png')
 
-    plt.figure('generated')
+    p_gen = sess.run(p, {z:np.random.normal(size=(100, n_lat))})
+    I_gen = batchmat_to_tileimg(p_gen, (height, width), (10, 10))
+    fig = plt.figure('generated')
     plt.gray()
     plt.axis('off')
-    eps = np.zeros((10*10, n_lat))
-    for i in range(10):
-        eps[i*10:(i+1)*10, i*2:(i+1)*2] = 5*np.random.normal(size=(10, 2))
-    p_gen = sess.run(p, {z:eps})
-    plt.imshow(batchmat_to_tileimg(p_gen, (28, 28), (10, 10)))
+    plt.imshow(I_gen)
+    fig.savefig(FLAGS.save_dir+'/generated.png')
 
     plt.show()
+
+def main(argv=None):
+    if FLAGS.train:
+        train()
+    else:
+        test()
+
+if __name__ == '__main__':
+    tf.app.run()
