@@ -3,16 +3,18 @@ from tensorflow.examples.tutorials.mnist import input_data
 from prob import *
 from utils.nn import *
 from utils.image import batchmat_to_tileimg
+from utils.data import load_pkl
+from stn.draw_attn import *
 import time
 import os
 import matplotlib.pyplot as plt
 
 FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_string('save_dir', 'results/mnist/vae',
+tf.app.flags.DEFINE_string('save_dir', 'results/tmnist/vae',
         """directory to save models.""")
-tf.app.flags.DEFINE_integer('n_epochs', 20,
+tf.app.flags.DEFINE_integer('n_epochs', 30,
         """number of epochs to run""")
-tf.app.flags.DEFINE_integer('n_hid', 200,
+tf.app.flags.DEFINE_integer('n_hid', 400,
         """number of hidden units""")
 tf.app.flags.DEFINE_integer('n_lat', 20,
         """number of latent variables""")
@@ -24,8 +26,8 @@ if not os.path.isdir(FLAGS.save_dir):
 
 n_hid = FLAGS.n_hid
 n_lat = FLAGS.n_lat
-height = 28
-width = 28
+height = 50
+width = 50
 n_in = height*width
 x = tf.placeholder(tf.float32, shape=[None, n_in])
 hid_enc = fc(x, n_hid)
@@ -35,10 +37,13 @@ z = gaussian_sample(z_mean, z_log_var)
 hid_dec = fc(z, n_hid)
 p = fc(hid_dec, n_in, activation_fn=tf.nn.sigmoid)
 
-mnist = input_data.read_data_sets("data/mnist")
+train_xy, valid_xy, test_xy = load_pkl('data/tmnist/tmnist.pkl.gz')
+train_x, _ = train_xy
+valid_x, _ = valid_xy
+test_x, _ = test_xy
 batch_size = 100
-n_train_batches = mnist.train.num_examples / batch_size
-n_valid_batches = mnist.validation.num_examples / batch_size
+n_train_batches = len(train_x) / batch_size
+n_valid_batches = len(valid_x) / batch_size
 
 neg_ll = bernoulli_neg_ll(x, p)
 kld = gaussian_kld(z_mean, z_log_var)
@@ -56,7 +61,7 @@ def train():
         train_neg_ll = 0.
         train_kld = 0.
         for j in range(n_train_batches):
-            batch_x, _ = mnist.train.next_batch(batch_size)
+            batch_x = train_x[j*batch_size:(j+1)*batch_size]
             _, batch_neg_ll, batch_kld = \
                     sess.run([train_op, neg_ll, kld], {x:batch_x})
             train_neg_ll += batch_neg_ll
@@ -67,7 +72,7 @@ def train():
         valid_neg_ll = 0.
         valid_kld = 0.
         for j in range(n_valid_batches):
-            batch_x, _ = mnist.validation.next_batch(batch_size)
+            batch_x = valid_x[j*batch_size:(j+1)*batch_size]
             batch_neg_ll, batch_kld = sess.run([neg_ll, kld], {x:batch_x})
             valid_neg_ll += batch_neg_ll
             valid_kld += batch_kld
@@ -85,7 +90,7 @@ def train():
 
 def test():
     saver.restore(sess, FLAGS.save_dir+'/model.ckpt')
-    batch_x, _ = mnist.test.next_batch(100)
+    batch_x = test_x[0:100]
     fig = plt.figure('original')
     plt.gray()
     plt.axis('off')
