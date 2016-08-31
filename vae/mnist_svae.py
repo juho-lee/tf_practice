@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
-from prob import *
+from utils.prob import *
 from utils.nn import *
 from utils.image import batchmat_to_tileimg
 import time
@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_string('save_dir', 'results/mnist/svae',
+tf.app.flags.DEFINE_string('save_dir', '../results/mnist/svae',
         """directory to save models.""")
 tf.app.flags.DEFINE_integer('n_epochs', 20,
         """number of epochs to run""")
@@ -32,16 +32,16 @@ height = 28
 width = 28
 n_in = height*width
 x = tf.placeholder(tf.float32, shape=[None, n_in])
-h_enc = fc(x, n_hid)
-z_mean = linear(h_enc, n_lat)
-z_log_var = linear(h_enc, n_lat)
+hid_enc = fc(x, n_hid)
+z_mean = linear(hid_enc, n_lat)
+z_log_var = linear(hid_enc, n_lat)
 z = gaussian_sample(z_mean, z_log_var)
-w_mean = linear(h_enc, n_fac)
-w_log_var = linear(h_enc, n_fac)
+w_mean = linear(hid_enc, n_fac)
+w_log_var = linear(hid_enc, n_fac)
 w = rect_gaussian_sample(w_mean, w_log_var)
 
-h_dec = fc(z, n_hid)
-factors = linear(h_dec, n_fac*n_in)
+hid_dec = fc(z, n_hid)
+factors = linear(hid_dec, n_fac*n_in)
 p = tf.slice(w, [0,0], [-1,1]) * tf.slice(factors, [0,0], [-1,n_in])
 for i in range(1, n_fac):
     p = p + tf.slice(w, [0,i], [-1,1]) * tf.slice(factors, [0,n_in*i], [-1,n_in])

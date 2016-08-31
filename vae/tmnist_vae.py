@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
-from prob import *
+from utils.prob import *
 from utils.nn import *
 from utils.image import batchmat_to_tileimg
 from utils.data import load_pkl
@@ -10,7 +10,7 @@ import os
 import matplotlib.pyplot as plt
 
 FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_string('save_dir', 'results/tmnist/vae',
+tf.app.flags.DEFINE_string('save_dir', '../results/tmnist/vae',
         """directory to save models.""")
 tf.app.flags.DEFINE_integer('n_epochs', 30,
         """number of epochs to run""")

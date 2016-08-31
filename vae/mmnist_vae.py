@@ -1,5 +1,5 @@
 import tensorflow as tf
-from prob import *
+from utils.prob import *
 from utils.nn import *
 from utils.image import batchmat_to_tileimg
 from utils.data import load_pkl
@@ -36,7 +36,10 @@ z = gaussian_sample(z_mean, z_log_var)
 hid_dec = fc(z, n_hid)
 p = fc(hid_dec, n_in, activation_fn=tf.nn.sigmoid)
 
-train_x, valid_x, test_x = load_pkl('data/mmnist/mmnist.pkl.gz')
+train_xy, valid_xy, test_xy = load_pkl('data/mmnist/mmnist.pkl.gz')
+train_x, _ = train_xy
+valid_x, _ = valid_xy
+test_x, _ = test_xy
 batch_size = 100
 n_train_batches = len(train_x) / batch_size
 n_valid_batches = len(valid_x) / batch_size
