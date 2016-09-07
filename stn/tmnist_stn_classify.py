@@ -2,7 +2,7 @@ import tensorflow as tf
 import tensorflow.contrib.layers as layers
 import numpy as np
 from utils.data import load_pkl
-from spatial_transformer import spatial_transformer, loc_last
+from spatial_transformer import spatial_transformer, to_loc
 import time
 from utils.image import batchmat_to_tileimg, batchimg_to_tileimg
 import matplotlib.pyplot as plt
@@ -40,10 +40,10 @@ loc = fc(fc(x, 500), 50)
 #loc = bn(fc(loc, 50, activation_fn=None), activation_fn=tf.nn.relu)
 """
 
-loc = loc_last(loc)
+loc = to_loc(loc, is_simple=True)
 
 # classification net
-trans = spatial_transformer(x_tensor, loc, [h_trans, w_trans])
+trans = spatial_transformer(x_tensor, loc, h_trans, w_trans)
 cl = conv(trans, 32, [3, 3], padding='VALID')
 cl = pool(cl, [2, 2])
 cl = conv(trans, 32, [3, 3], padding='VALID')
@@ -93,7 +93,7 @@ with tf.Session() as sess:
 
     I_orig = batchmat_to_tileimg(test_x[0:batch_size], (h, w), (10, 10))
     attended = sess.run(trans, {x:test_x[0:batch_size]})
-    I_attn = batchimg_to_tileimg(attended, (10, 10), channel_dim=3)
+    I_attn = batchimg_to_tileimg(attended, (10, 10))
 
     plt.figure('original')
     plt.gray()

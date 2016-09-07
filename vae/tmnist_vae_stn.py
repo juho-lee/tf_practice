@@ -4,13 +4,13 @@ from utils.prob import *
 from utils.nn import *
 from utils.image import batchmat_to_tileimg
 from utils.data import load_pkl
-from draw.attention import *
+from stn.spatial_transformer import *
 import time
 import os
 import matplotlib.pyplot as plt
 
 FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_string('save_dir', '../results/tmnist/vae_dattn',
+tf.app.flags.DEFINE_string('save_dir', '../results/tmnist/vae_stn',
         """directory to save models.""")
 tf.app.flags.DEFINE_integer('n_epochs', 30,
         """number of epochs to run""")
@@ -18,8 +18,6 @@ tf.app.flags.DEFINE_integer('n_hid', 400,
         """number of hidden units""")
 tf.app.flags.DEFINE_integer('n_lat', 20,
         """number of latent variables""")
-tf.app.flags.DEFINE_integer('N', 30,
-        """attention size""")
 tf.app.flags.DEFINE_boolean('train', True,
         """training (True) vs testing (False)""")
 
@@ -28,43 +26,23 @@ if not os.path.isdir(FLAGS.save_dir):
 
 n_hid = FLAGS.n_hid
 n_lat = FLAGS.n_lat
-N = FLAGS.N
 height = 50
 width = 50
-attunit = AttentionUnit(height, width, 1, N)
 n_in = height*width
 
-x = tf.placeholder(tf.float32, shape=[None, n_in])
-hid_where_enc = fc(x, n_hid)
-z_where_m = to_att(hid_where_enc)
-z_where_lv = linear(hid_where_enc, 5)
-z_where = gaussian_sample(z_where_m, z_where_lv)
-x_what = attunit.read(x, z_where)
-hid_what = fc(x_what, n_hid)
-z_what_m = linear(hid_what_enc, n_lat)
-z_what_lv = linear(hid_what_enc, n_lat)
-z_what = gaussian_sample(z_what_m, z_what_lv)
-
-hid_what_dec = fc(z_what, n_hid)
-p_what = linear(hid_what_dec, N*N)
-
-
-
-"""
-x = tf.placeholder(tf.float32, shape=[None, n_in])
-hid_enc = fc(x, n_hid)
-att_enc = to_att(hid_enc)
-x_att = attunit.read(x, att_enc, delta_max=0.6)
-hid_enc = fc(tf.concat(1, [att_enc, x_att]), n_hid)
+x = tf.placeholder(tf.float32, shape=[None,n_in])
+x_img = tf.reshape(x, [-1, height, width, 1])
+loc_enc = to_loc(fc(x, n_hid), is_simple=True)
+x_att = flat(spatial_transformer(x_img, loc_enc, height, width))
+hid_enc = fc(tf.concat(1, [loc_enc, x_att]), n_hid)
 z_mean = linear(hid_enc, n_lat)
 z_log_var = linear(hid_enc, n_lat)
-
 z = gaussian_sample(z_mean, z_log_var)
 hid_dec = fc(z, n_hid)
-att_dec = to_att(hid_dec)
-p_att = linear(hid_dec, N*N)
-p = tf.nn.sigmoid(attunit.write(p_att, att_dec, delta_min=1.0))
-"""
+loc_dec = to_loc(hid_dec, is_simple=True)
+p_att = linear(hid_dec, n_in)
+p = flat(tf.nn.sigmoid(spatial_transformer(
+    tf.reshape(p_att, [-1,height,width,1]), loc_dec, height, width)))
 
 train_xy, valid_xy, test_xy = load_pkl('data/tmnist/tmnist.pkl.gz')
 train_x, _ = train_xy
@@ -83,7 +61,7 @@ sess = tf.Session()
 
 def train():
     logfile = open(FLAGS.save_dir + '/train.log', 'w', 0)
-    logfile.write(('n_in: %d, n_hid: %d, n_lat: %d, N: %d\n' % (n_in, n_hid, n_lat, N)))
+    logfile.write(('n_in: %d, n_hid: %d, n_lat: %d\n' % (n_in, n_hid, n_lat)))
     sess.run(tf.initialize_all_variables())
     for i in range(FLAGS.n_epochs):
         start = time.time()

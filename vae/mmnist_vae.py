@@ -3,13 +3,12 @@ from utils.prob import *
 from utils.nn import *
 from utils.image import batchmat_to_tileimg
 from utils.data import load_pkl
-from stn.draw_attn import *
 import time
 import os
 import matplotlib.pyplot as plt
 
 FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_string('save_dir', 'results/mmnist/vae',
+tf.app.flags.DEFINE_string('save_dir', '../results/mmnist/vae',
         """directory to save models.""")
 tf.app.flags.DEFINE_integer('n_epochs', 30,
         """number of epochs to run""")

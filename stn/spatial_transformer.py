@@ -1,18 +1,13 @@
 import tensorflow as tf
 import numpy as np
 
-def meshgrid(height, width):
-    x_t = tf.reshape(tf.matmul(tf.ones([height, 1]),
-            tf.expand_dims(tf.linspace(-1., 1., width), 0)), [1, -1])
-    y_t = tf.reshape(tf.matmul(tf.expand_dims(tf.linspace(-1., 1., height), 1),
-            tf.ones([1, width])), [1, -1])
-    return tf.concat(0, [x_t, y_t, tf.ones_like(x_t)])
+def repeat(x, n):
+    return tf.reshape(tf.tile(tf.expand_dims(x, 1), [1,n]), [-1])
 
-def repeat(x, num_repeats):
-    return tf.reshape(
-            tf.matmul(tf.reshape(x, [-1,1]),
-                tf.cast(tf.expand_dims(tf.ones(num_repeats), 0), 'int32')),
-            [-1])
+def meshgrid(height, width):
+    x = tf.tile(tf.linspace(-1.,1.,width), [height])
+    y = repeat(tf.linspace(-1.,1.,height), width)
+    return x, y
 
 def interpolate(U, x_s, y_s, out_height, out_width):
     num_batch = tf.shape(U)[0]
@@ -54,81 +49,74 @@ def interpolate(U, x_s, y_s, out_height, out_width):
     output = tf.add_n([wa*Ia, wb*Ib, wc*Ic, wd*Id])
     return output
 
-def transform(U, grid_t, num_batch, out_height, out_width, num_channels):
-    x_s = tf.reshape(tf.slice(grid_t, [0,0,0], [-1,1,-1]), [-1])
-    y_s = tf.reshape(tf.slice(grid_t, [0,1,0], [-1,1,-1]), [-1])
+def transform(U, x_s, y_s, num_batch, out_height, out_width, num_channels):
     return tf.reshape(
             interpolate(U, x_s, y_s, out_height, out_width),
             tf.pack([num_batch, out_height, out_width, num_channels]))
 
-def spatial_transformer(U, theta, out_size):
+def spatial_transformer(U, theta, out_height, out_width):
     num_batch = tf.shape(U)[0]
     height, width, num_channels = U.get_shape()[1:]
-    out_height, out_width = out_size
-    grid = tf.tile(tf.expand_dims(meshgrid(out_height, out_width), 0),
-            [num_batch, 1, 1])
-    grid_t = tf.batch_matmul(tf.reshape(theta, [-1, 2, 3]), grid)
-    return transform(U, grid_t, num_batch, out_height, out_width, num_channels)
 
-def multiple_spatial_transformer(U, theta, num_st, out_size):
-    num_batch = tf.shape(U)[0]
-    height, width, num_channels = U.get_shape()[1:]
-    out_height, out_width = out_size
-    grid = tf.tile(tf.expand_dims(meshgrid(out_height, out_width), 0),
-            [num_batch, 1, 1])
-    grid_t = tf.batch_matmul(
-            tf.reshape(tf.slice(theta, [0,0], [-1,6]), [-1, 2, 3]), grid)
-    output = transform(U, grid_t, num_batch, out_height, out_width, num_channels)
-    for i in range(1, num_st):
-        grid_t = tf.batch_matmul(
-            tf.reshape(tf.slice(theta, [0,6*i], [-1,6]), [-1, 2, 3]), grid)
-        output = tf.concat(3, [output, 
-            transform(U, grid_t, num_batch, out_height, out_width, num_channels)])
-    return output          
+    x_t, y_t = meshgrid(out_height, out_width)
+    x_t = tf.expand_dims(x_t, 0)
+    y_t = tf.expand_dims(y_t, 0)
+    if theta.get_shape()[1] == 3:
+        s, t_x, t_y = tf.split(1, 3, theta)
+        x_s = tf.reshape(s*tf.tile(x_t, [num_batch,1]) + t_x, [-1])
+        y_s = tf.reshape(s*tf.tile(y_t, [num_batch,1]) + t_y, [-1])
+    else:
+        grid = tf.expand_dims(tf.concat(0, [x_t, y_t, tf.ones_like(x_t)]), 0)
+        grid = tf.tile(grid, [num_batch,1,1])
+        grid_t = tf.batch_matmul(tf.reshape(theta, [-1,2,3]), grid)
+        x_s = tf.reshape(tf.slice(grid_t, [0,0,0], [-1,1,-1]), [-1])
+        y_s = tf.reshape(tf.slice(grid_t, [0,1,0], [-1,1,-1]), [-1])
+
+    return transform(U, x_s, y_s, num_batch, out_height, out_width, num_channels)
 
 # last layer of localization net
 from tensorflow.contrib import layers
-def loc_last(input):
+def to_loc(input, is_simple=False):
     if len(input.get_shape()) == 4:
         input = layers.flatten(input)
     num_inputs = input.get_shape()[1]
-    W_init = tf.constant_initializer(np.zeros((num_inputs, 6)))
-    b_init = tf.constant_initializer(
-            np.array([[1.,0,0],[0,1.,0]]).flatten())
-    return layers.fully_connected(input, 6, activation_fn=None,
-        weights_initializer=W_init,
-        biases_initializer=b_init)
+    num_outputs = 3 if is_simple else 6
+    W_init = tf.constant_initializer(
+            np.zeros((num_inputs, num_outputs)))
+    if is_simple:
+        b_init = tf.constant_initializer(np.array([1.,0.,0.]))
+    else:
+        b_init = tf.constant_initializer(np.array([1.,0.,0.,0.,1.,0.]))
 
-def multiple_loc_last(input, num_st):
-    if len(input.get_shape()) == 4:
-        input = layers.flatten(input)
-    num_inputs = input.get_shape()[1]
-    W_init = tf.constant_initializer(np.zeros((num_inputs, 6*num_st)))
-    b_init = tf.constant_initializer(
-                tf.tile(np.array([[1.,0,0],[0,1.,0]]).flatten(), [1, num_st]))
-    return layers.fully_connected(input, 6*num_st, activation_fn=None,
-        weights_initializer=W_init,
-        biases_initializer=b_init)
+    return layers.fully_connected(input, num_outputs,
+            activation_fn=None,
+            weights_initializer=W_init,
+            biases_initializer=b_init)
 
-if __name__ == '__main__':  
+if __name__ == '__main__':
     from scipy import ndimage
     import matplotlib.pyplot as plt
     U = ndimage.imread('gong13.jpg')
     height, width, num_channels = U.shape
     U = U / 255.
     U = U.reshape(1, height, width, num_channels).astype('float32')
-    theta = np.array([[4.,1,3],[0,4.,2]]).reshape(1, 6)
-    theta = np.concatenate([theta, np.array([[2.0,0,-1],[0,2.0,0]]).reshape(1, 6)], 1)
 
-    U_ = tf.placeholder(tf.float32, [1, height, width, num_channels])
-    theta_ = tf.placeholder(tf.float32, [1, 12])
-    out_size = [height/2, width/2]
-    T_ = multiple_spatial_transformer(U_, theta_, 2, out_size)
+    s = -0.5
+    t_x = 0.8
+    t_y = 0.4
+    theta = np.array([[s, 0., t_x, 0., s, t_y]])
+    theta_s = np.array([[s, t_x, t_y]])
+
+    U_ = tf.placeholder(tf.float32, [None, height, width, num_channels])
+    theta_ = tf.placeholder(tf.float32, [None, 6])
+    theta_s_ = tf.placeholder(tf.float32, [None, 3])
+    T_ = spatial_transformer(U_, theta_, height, width)
+    T_s_ = spatial_transformer(U_, theta_s_, height, width)
 
     with tf.Session() as sess:
-        T = sess.run(T_, {U_:U, theta_:theta})        
+        T, T_s = sess.run([T_, T_s_], {U_:U, theta_:theta, theta_s_:theta_s})
         plt.figure()
-        plt.imshow(T[0,:,:,0:3])
+        plt.imshow(T[0])
         plt.figure()
-        plt.imshow(T[0,:,:,3:6])
+        plt.imshow(T_s[0])
         plt.show()

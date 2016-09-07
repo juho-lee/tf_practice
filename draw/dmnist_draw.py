@@ -2,6 +2,7 @@ import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 from utils.prob import *
 from utils.nn import *
+from utils.data import load_pkl
 from utils.image import batchmat_to_tileimg
 from attention import *
 import time
@@ -19,7 +20,7 @@ tf.app.flags.DEFINE_integer('n_lat', 20,
         """number of latent variables""")
 tf.app.flags.DEFINE_integer('N', 5,
         """attention size""")
-tf.app.flags.DEFINE_integer('n_glim', 10,
+tf.app.flags.DEFINE_integer('n_glim', 20,
         """number of glimpses""")
 tf.app.flags.DEFINE_boolean('train', True,
         """training (True) vs testing (False)""")
@@ -31,8 +32,8 @@ n_hid = FLAGS.n_hid
 n_lat = FLAGS.n_lat
 N = FLAGS.N
 T = FLAGS.n_glim
-height = 28
-width = 28
+height = 56
+width = 56
 n_in = height*width
 
 attunit = AttentionUnit(height, width, 1, N)
@@ -53,13 +54,11 @@ x = tf.placeholder(tf.float32, [None, n_in])
 hid_dec = tf.zeros([tf.shape(x)[0], n_hid])
 state_enc = rnn_enc.zero_state(tf.shape(x)[0], tf.float32)
 state_dec = rnn_dec.zero_state(tf.shape(x)[0], tf.float32)
-x_att = [0]*T
 p = [0]*T
 
 x_err = x - tf.nn.sigmoid(tf.zeros_like(x))
 att_enc = linear(hid_dec, 5, scope='att_enc')
 r = attunit.read([x, x_err], att_enc)
-x_att[0] = tf.slice(r, [0,0], [-1,attunit.read_dim])
 with tf.variable_scope('rnn_enc'):
     hid_enc, state_enc = rnn_enc(tf.concat(1, [r, hid_dec]), state_enc)
 z_mean = linear(hid_enc, n_lat, scope='z_mean')
@@ -77,7 +76,6 @@ for t in range(1, T):
     x_err = x - tf.nn.sigmoid(c)
     att_enc = linear(hid_dec, 5, scope='att_enc', reuse=True)
     r = attunit.read([x, x_err], att_enc)
-    x_att[t] = tf.slice(r, [0,0], [-1,attunit.read_dim])
     with tf.variable_scope('rnn_enc', reuse=True):
         hid_enc, state_enc = rnn_enc(tf.concat(1, [r, hid_dec]), state_enc)
     z_mean = linear(hid_enc, n_lat, scope='z_mean', reuse=True)
@@ -96,10 +94,10 @@ kld = tf.reduce_mean(kld)
 loss = neg_ll + kld
 train_op = tf.train.AdamOptimizer().minimize(loss)
 
-mnist = input_data.read_data_sets("data/mnist")
+train_x, valid_x, test_x = load_pkl('data/dmnist/dmnist.pkl.gz')
 batch_size = 100
-n_train_batches = mnist.train.num_examples / batch_size
-n_valid_batches = mnist.validation.num_examples / batch_size
+n_train_batches = len(train_x) / batch_size
+n_valid_batches = len(valid_x) / batch_size
 
 saver = tf.train.Saver()
 sess = tf.Session()
@@ -113,7 +111,7 @@ def train():
         train_neg_ll = 0.
         train_kld = 0.
         for j in range(n_train_batches):
-            batch_x, _ = mnist.train.next_batch(batch_size)
+            batch_x = train_x[j*batch_size:(j+1)*batch_size]
             _, batch_neg_ll, batch_kld = \
                     sess.run([train_op, neg_ll, kld], {x:batch_x})
             train_neg_ll += batch_neg_ll
@@ -124,7 +122,7 @@ def train():
         valid_neg_ll = 0.
         valid_kld = 0.
         for j in range(n_valid_batches):
-            batch_x, _ = mnist.validation.next_batch(batch_size)
+            batch_x = valid_x[j*batch_size:(j+1)*batch_size]
             batch_neg_ll, batch_kld = sess.run([neg_ll, kld], {x:batch_x})
             valid_neg_ll += batch_neg_ll
             valid_kld += batch_kld
@@ -142,7 +140,7 @@ def train():
 
 def test():
     saver.restore(sess, FLAGS.save_dir+'/model.ckpt')
-    batch_x, _ = mnist.test.next_batch(10)
+    batch_x = test_x[0:100]
     batch_p = sess.run(p, {x:batch_x})
     P = np.zeros((0, n_in))
     for i in range(10):
@@ -152,19 +150,9 @@ def test():
     fig = plt.figure('reconstructed')
     plt.gray()
     plt.axis('off')
-    plt.imshow(batchmat_to_tileimg(P, (28, 28), (10, T+1)))
+    plt.imshow(batchmat_to_tileimg(P, (height, width), (10, T+1)))
     fig.savefig(FLAGS.save_dir+'/reconstructed.png')
-
-    P = np.zeros((0, attunit.read_dim))
-    for t in range(T):
-        batch_att = sess.run(tf.nn.sigmoid(x_att[t]), {x:batch_x})
-        P = np.concatenate([P, batch_att], 0)
-    fig = plt.figure('attended')
-    plt.gray()
-    plt.axis('off')
-    plt.imshow(batchmat_to_tileimg(P, (N, N), (10, T)))
     plt.show()
-
 
 def main(argv=None):
     if FLAGS.train:

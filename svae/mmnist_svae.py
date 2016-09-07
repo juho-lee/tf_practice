@@ -3,25 +3,22 @@ from utils.prob import *
 from utils.nn import *
 from utils.image import batchmat_to_tileimg
 from utils.data import load_pkl
-from draw.attention import *
 import time
 import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_string('save_dir', '../results/mmnist/svae_dattn',
+tf.app.flags.DEFINE_string('save_dir', '../results/mmnist/svae',
         """directory to save models.""")
 tf.app.flags.DEFINE_integer('n_epochs', 20,
         """number of epochs to run""")
-tf.app.flags.DEFINE_integer('n_hid', 600,
+tf.app.flags.DEFINE_integer('n_hid', 500,
         """number of hidden units""")
 tf.app.flags.DEFINE_integer('n_lat', 20,
         """number of latent variables""")
 tf.app.flags.DEFINE_integer('n_fac', 10,
         """number of factors""")
-tf.app.flags.DEFINE_integer('N', 30,
-        """attention size""")
 tf.app.flags.DEFINE_boolean('train', True,
         """training (True) vs testing (False)""")
 
@@ -33,14 +30,8 @@ n_lat = FLAGS.n_lat
 n_fac = FLAGS.n_fac
 height = 60
 width = 60
-N = FLAGS.N
-attunit = AttentionUnit(height, width, 1, N)
 n_in = height*width
 x = tf.placeholder(tf.float32, shape=[None, n_in])
-
-att_enc = linear(fc(x, 50), 5*n_fac)
-x_att = attunit.read_multiple(x, att_enc, n_fac)
-hid_enc = fc(tf.concat(1, [att_enc, x_att]), n_hid)
 hid_enc = fc(x, n_hid)
 z_mean = linear(hid_enc, n_lat)
 z_log_var = linear(hid_enc, n_lat)
@@ -50,20 +41,16 @@ w_log_var = linear(hid_enc, n_fac)
 w = rect_gaussian_sample(w_mean, w_log_var)
 
 hid_dec = fc(z, n_hid)
-att_dec = linear(hid_dec, 5*n_fac)
-p_att = linear(hid_dec, N*N*n_fac)
-factors = attunit.write_multiple(p_att, att_dec, n_fac)
-p = tf.slice(w, [0,0], [-1,1])*tf.slice(factors, [0,0], [-1,n_in])
+factors = linear(hid_dec, n_fac*n_in)
+p = tf.slice(w, [0,0], [-1,1]) * tf.slice(factors, [0,0], [-1,n_in])
 for i in range(1, n_fac):
-    p = p + tf.slice(w, [0,i], [-1,1]) * \
-            tf.slice(factors, [0,n_in*i], [-1, n_in])
+    p = p + tf.slice(w, [0,i], [-1,1]) * tf.slice(factors, [0,n_in*i], [-1,n_in])
 p = tf.nn.sigmoid(p)
 
 train_xy, valid_xy, test_xy = load_pkl('data/mmnist/mmnist.pkl.gz')
 train_x, _ = train_xy
 valid_x, _ = valid_xy
 test_x, _ = test_xy
-
 batch_size = 100
 n_train_batches = len(train_x) / batch_size
 n_valid_batches = len(valid_x) / batch_size
