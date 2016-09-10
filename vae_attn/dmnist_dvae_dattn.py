@@ -134,25 +134,30 @@ def test():
     fig.savefig(FLAGS.save_dir+'/original.png')
 
     fa, sa = sess.run([x_att0, x_att1], {x:batch_x})
-    plt.figure('first att')
+    fig = plt.figure('first att')
     plt.gray()
     plt.axis('off')
     plt.imshow(batchmat_to_tileimg(fa, (N, N), (10, 10)))
+    fig.savefig(FLAGS.save_dir+'/first_attention.png')
 
-    plt.figure('second att')
+    fig = plt.figure('second att')
     plt.gray()
     plt.axis('off')
     plt.imshow(batchmat_to_tileimg(sa, (N, N), (10, 10)))
+    fig.savefig(FLAGS.save_dir+'/second_attention.png')
 
-    fa, sa = sess.run([p0, p1], {x:batch_x})
-    plt.figure('first recon')
+    fr, sr = sess.run([p0, p1], {x:batch_x})
+    fig = plt.figure('first recon')
     plt.gray()
     plt.axis('off')
-    plt.imshow(batchmat_to_tileimg(fa, (height, width), (10, 10)))
-    plt.figure('second recon')
+    plt.imshow(batchmat_to_tileimg(fr, (height, width), (10, 10)))
+    fig.savefig(FLAGS.save_dir+'/first_recon.png')
+
+    fig = plt.figure('second recon')
     plt.gray()
     plt.axis('off')
-    plt.imshow(batchmat_to_tileimg(sa, (height, width), (10, 10)))
+    plt.imshow(batchmat_to_tileimg(sr, (height, width), (10, 10)))
+    fig.savefig(FLAGS.save_dir+'/second_recon.png')
 
 
     fig = plt.figure('reconstructed')
