@@ -3,14 +3,12 @@ from utils.prob import *
 from utils.nn import *
 from utils.image import batchmat_to_tileimg
 from utils.data import load_pkl
-from draw.attention import *
-from stn.spatial_transformer import *
 import time
 import os
 import matplotlib.pyplot as plt
 
 FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_string('save_dir', '../results/dmnist/vae_dattn',
+tf.app.flags.DEFINE_string('save_dir', '../results/mmnist/vae_bn',
         """directory to save models.""")
 tf.app.flags.DEFINE_integer('n_epochs', 30,
         """number of epochs to run""")
@@ -18,8 +16,6 @@ tf.app.flags.DEFINE_integer('n_hid', 500,
         """number of hidden units""")
 tf.app.flags.DEFINE_integer('n_lat', 20,
         """number of latent variables""")
-tf.app.flags.DEFINE_integer('N', 30,
-        """attention size""")
 tf.app.flags.DEFINE_boolean('train', True,
         """training (True) vs testing (False)""")
 
@@ -28,38 +24,30 @@ if not os.path.isdir(FLAGS.save_dir):
 
 n_hid = FLAGS.n_hid
 n_lat = FLAGS.n_lat
-N = FLAGS.N
-height = 56
-width = 56
-attunit = AttentionUnit(height, width, 1, N)
+height = 60
+width = 60
 n_in = height*width
-
-x = tf.placeholder(tf.float32, [None, n_in])
-hid_enc = fc(x, n_hid)
-att_enc = to_att(hid_enc, n_att=2)
-x_att = attunit.read_multiple(x, att_enc, 2, delta_max=0.5)
-hid_enc = fc(tf.concat(1, [att_enc, x_att]), n_hid)
+x = tf.placeholder(tf.float32, shape=[None, n_in])
+is_training = tf.placeholder(tf.bool)
+hid_enc = fc_bn(x, n_hid, is_training, 'hid_enc')
 z_mean = linear(hid_enc, n_lat)
 z_log_var = linear(hid_enc, n_lat)
 z = gaussian_sample(z_mean, z_log_var)
+hid_dec = fc_bn(z, n_hid, is_training, 'hid_dec')
+p = fc_bn(hid_dec, n_in, is_training, 'p',
+        activation_fn=tf.nn.sigmoid)
 
-hid_dec = fc(z, n_hid)
-att_dec = to_att(hid_dec, n_att=2)
-p_att = linear(hid_dec, 2*N*N)
-p = attunit.write_multiple(p_att, att_dec, 2, delta_min=1.5)
-p = tf.nn.sigmoid(tf.slice(p, [0,0], [-1,n_in]) \
-        + tf.slice(p, [0,attunit.read_dim], [-1, n_in]))
-
-
-neg_ll = bernoulli_neg_ll(x, p)
-kld = gaussian_kld(z_mean, z_log_var)
-loss = neg_ll + kld
-
-train_x, valid_x, test_x = load_pkl('data/dmnist/dmnist_fixed.pkl.gz')
+train_xy, valid_xy, test_xy = load_pkl('data/mmnist/mmnist.pkl.gz')
+train_x, _ = train_xy
+valid_x, _ = valid_xy
+test_x, _ = test_xy
 batch_size = 100
 n_train_batches = len(train_x) / batch_size
 n_valid_batches = len(valid_x) / batch_size
 
+neg_ll = bernoulli_neg_ll(x, p)
+kld = gaussian_kld(z_mean, z_log_var)
+loss = neg_ll + kld
 train_op = tf.train.AdamOptimizer().minimize(loss)
 saver = tf.train.Saver()
 sess = tf.Session()
@@ -75,7 +63,7 @@ def train():
         for j in range(n_train_batches):
             batch_x = train_x[j*batch_size:(j+1)*batch_size]
             _, batch_neg_ll, batch_kld = \
-                    sess.run([train_op, neg_ll, kld], {x:batch_x})
+                    sess.run([train_op, neg_ll, kld], {x:batch_x, is_training:True})
             train_neg_ll += batch_neg_ll
             train_kld += batch_kld
         train_neg_ll /= n_train_batches
@@ -85,7 +73,7 @@ def train():
         valid_kld = 0.
         for j in range(n_valid_batches):
             batch_x = valid_x[j*batch_size:(j+1)*batch_size]
-            batch_neg_ll, batch_kld = sess.run([neg_ll, kld], {x:batch_x})
+            batch_neg_ll, batch_kld = sess.run([neg_ll, kld], {x:batch_x, is_training:False})
             valid_neg_ll += batch_neg_ll
             valid_kld += batch_kld
         valid_neg_ll /= n_valid_batches
@@ -103,36 +91,20 @@ def train():
 def test():
     saver.restore(sess, FLAGS.save_dir+'/model.ckpt')
     batch_x = test_x[0:100]
-
-
     fig = plt.figure('original')
     plt.gray()
     plt.axis('off')
     plt.imshow(batchmat_to_tileimg(batch_x, (height, width), (10, 10)))
     fig.savefig(FLAGS.save_dir+'/original.png')
 
-    x_att0 = tf.slice(x_att, [0,0], [-1,attunit.read_dim])
-    x_att1 = tf.slice(x_att, [0,attunit.read_dim], [-1,attunit.read_dim])
-    fa, sa = sess.run([tf.nn.sigmoid(x_att0), tf.nn.sigmoid(x_att1)], {x:batch_x})
-    plt.figure('first')
-    plt.gray()
-    plt.axis('off')
-    plt.imshow(batchmat_to_tileimg(fa, (N, N), (10, 10)))
-
-    plt.figure('second')
-    plt.gray()
-    plt.axis('off')
-    plt.imshow(batchmat_to_tileimg(sa, (N, N), (10, 10)))
-
-
     fig = plt.figure('reconstructed')
     plt.gray()
     plt.axis('off')
-    p_recon = sess.run(p, {x:batch_x})
+    p_recon = sess.run(p, {x:batch_x, is_training:False})
     plt.imshow(batchmat_to_tileimg(p_recon, (height, width), (10, 10)))
     fig.savefig(FLAGS.save_dir+'/reconstructed.png')
 
-    p_gen = sess.run(p, {z:np.random.normal(size=(100, n_lat))})
+    p_gen = sess.run(p, {z:np.random.normal(size=(100, n_lat)), is_training:False})
     I_gen = batchmat_to_tileimg(p_gen, (height, width), (10, 10))
     fig = plt.figure('generated')
     plt.gray()

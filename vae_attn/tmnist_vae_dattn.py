@@ -4,20 +4,22 @@ from utils.prob import *
 from utils.nn import *
 from utils.image import batchmat_to_tileimg
 from utils.data import load_pkl
-from stn.spatial_transformer import *
+from draw.attention import *
 import time
 import os
 import matplotlib.pyplot as plt
 
 FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_string('save_dir', '../results/tmnist/vae_stn',
+tf.app.flags.DEFINE_string('save_dir', '../results/tmnist/vae_dattn',
         """directory to save models.""")
 tf.app.flags.DEFINE_integer('n_epochs', 30,
         """number of epochs to run""")
 tf.app.flags.DEFINE_integer('n_hid', 400,
         """number of hidden units""")
-tf.app.flags.DEFINE_integer('n_lat', 20,
+tf.app.flags.DEFINE_integer('n_lat', 10,
         """number of latent variables""")
+tf.app.flags.DEFINE_integer('N', 30,
+        """attention size""")
 tf.app.flags.DEFINE_boolean('train', True,
         """training (True) vs testing (False)""")
 
@@ -26,23 +28,26 @@ if not os.path.isdir(FLAGS.save_dir):
 
 n_hid = FLAGS.n_hid
 n_lat = FLAGS.n_lat
+N = FLAGS.N
 height = 50
 width = 50
+attunit = AttentionUnit(height, width, 1, N)
 n_in = height*width
 
-x = tf.placeholder(tf.float32, shape=[None,n_in])
-x_img = tf.reshape(x, [-1, height, width, 1])
-loc_enc = to_loc(fc(x, n_hid), is_simple=True)
-x_att = flat(spatial_transformer(x_img, loc_enc, height, width))
-hid_enc = fc(tf.concat(1, [loc_enc, x_att]), n_hid)
-z_mean = linear(hid_enc, n_lat)
-z_log_var = linear(hid_enc, n_lat)
-z = gaussian_sample(z_mean, z_log_var)
-hid_dec = fc(z, n_hid)
-loc_dec = to_loc(hid_dec, is_simple=True)
-p_att = linear(hid_dec, n_in)
-p = flat(tf.nn.sigmoid(spatial_transformer(
-    tf.reshape(p_att, [-1,height,width,1]), loc_dec, height, width)))
+x = tf.placeholder(tf.float32, [None, n_in])
+hid_t_enc = fc(x, n_hid)
+z_t_mean = linear(hid_t_enc, n_lat)
+z_t_log_var = linear(hid_t_enc, n_lat)
+z_t = gaussian_sample(z_t_mean, z_t_log_var)
+trans = to_att(fc(z_t, 10))
+x_att = attunit.read(x, trans)
+hid_c_enc = fc(x_att, n_hid)
+z_c_mean = linear(hid_c_enc, n_lat)
+z_c_log_var = linear(hid_c_enc, n_lat)
+z_c = gaussian_sample(z_c_mean, z_c_log_var)
+hid_dec = fc(z_c, n_hid)
+p_att = fc(hid_dec, N*N, activation_fn=tf.nn.sigmoid)
+p = tf.clip_by_value(attunit.write(p_att, trans), 0, 1)
 
 train_xy, valid_xy, test_xy = load_pkl('data/tmnist/tmnist.pkl.gz')
 train_x, _ = train_xy
@@ -53,16 +58,19 @@ n_train_batches = len(train_x) / batch_size
 n_valid_batches = len(valid_x) / batch_size
 
 neg_ll = bernoulli_neg_ll(x, p)
-kld = gaussian_kld(z_mean, z_log_var)
+kld = gaussian_kld(z_t_mean, z_t_log_var) \
+        + gaussian_kld(z_c_mean, z_c_log_var)
 loss = neg_ll + kld
-train_op = tf.train.AdamOptimizer().minimize(loss)
+learning_rate = tf.placeholder(tf.float32)
+train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss)
 saver = tf.train.Saver()
 sess = tf.Session()
 
 def train():
     logfile = open(FLAGS.save_dir + '/train.log', 'w', 0)
-    logfile.write(('n_in: %d, n_hid: %d, n_lat: %d\n' % (n_in, n_hid, n_lat)))
+    logfile.write(('n_in: %d, n_hid: %d, n_lat: %d, N: %d\n' % (n_in, n_hid, n_lat, N)))
     sess.run(tf.initialize_all_variables())
+    lr = 0.001
     for i in range(FLAGS.n_epochs):
         start = time.time()
         train_neg_ll = 0.
@@ -70,11 +78,13 @@ def train():
         for j in range(n_train_batches):
             batch_x = train_x[j*batch_size:(j+1)*batch_size]
             _, batch_neg_ll, batch_kld = \
-                    sess.run([train_op, neg_ll, kld], {x:batch_x})
+                    sess.run([train_op, neg_ll, kld], {x:batch_x, learning_rate:lr})
             train_neg_ll += batch_neg_ll
             train_kld += batch_kld
         train_neg_ll /= n_train_batches
         train_kld /= n_train_batches
+        if (i+1) % 3 == 0:
+            lr = lr * 0.8
 
         valid_neg_ll = 0.
         valid_kld = 0.
@@ -122,9 +132,11 @@ def test():
     plt.imshow(batchmat_to_tileimg(p_recon, (height, width), (10, 10)))
     fig.savefig(FLAGS.save_dir+'/reconstructed.png')
 
+    t_noise = np.random.normal(size=(100, n_lat))
+    c_noise = np.repeat(np.random.normal(size=(10, n_lat)), 10, axis=0)
     p_gen_att, p_gen = sess.run([tf.nn.sigmoid(p_att), p],
-            {z:np.random.normal(size=(100, n_lat))})
-    fig = plt.figure('generated_attended')
+            {z_t:t_noise, z_c:c_noise})
+    fig = plt.figure('generated_attended.png')
     plt.gray()
     plt.axis('off')
     plt.imshow(batchmat_to_tileimg(p_gen_att, (N, N), (10, 10)))

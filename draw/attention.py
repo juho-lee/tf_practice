@@ -17,6 +17,10 @@ def to_att(input, n_att=1,
             weights_initializer=W_init,
             biases_initializer=b_init, **kwargs)
 
+def get_inv(att):
+    g_x, g_y, log_var, log_delta, log_gamma = tf.split(1, 5, att)
+    return tf.concat(1, [g_x, g_y, log_var, log_delta, -log_gamma])
+
 class AttentionUnit(object):
     def  __init__(self, height, width, num_ch, N):
         self.height = height
@@ -150,22 +154,22 @@ if __name__ == '__main__':
     unit = AttentionUnit(height, width, 3, N)
     att = tf.placeholder(tf.float32, [1, 5])
     I_read = unit.read(I, att)
-    I_write = unit.write(I_read, att)
+    I_write = unit.write(I_read, get_inv(att))
 
     def imagify(flat, height, width):
         image = flat.reshape([3, height, width]).transpose([1, 2, 0])
-        return image / image.max()
+        return image
 
     sess = tf.Session()
     pylab.figure('original')
-    pylab.imshow(imagify(I, height, width), interpolation='nearest')
+    pylab.imshow(imagify(I, height, width))
 
     pylab.figure('read')
     I_read_run, I_write_run = sess.run([I_read, I_write],
-            {att: np.array([[0.0, 0.0, np.log(1.), np.log(0.2), np.log(1.)]])})
-    pylab.imshow(imagify(I_read_run, N, N), interpolation='nearest')
+            {att: np.array([[0.0, 0.0, np.log(1.), np.log(0.3), np.log(2.)]])})
+    pylab.imshow(imagify(I_read_run, N, N))
 
     pylab.figure('write')
-    pylab.imshow(imagify(I_write_run, height, width), interpolation='nearest')
+    pylab.imshow(imagify(I_write_run, height, width))
 
     pylab.show(block=True)

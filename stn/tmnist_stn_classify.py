@@ -14,8 +14,8 @@ bn = layers.batch_norm
 
 h = 50
 w = 50
-h_trans = 50
-w_trans = 50
+h_trans = 30
+w_trans = 30
 
 x = tf.placeholder(tf.float32, [None, h*w])
 x_tensor = tf.reshape(x, [-1, h, w, 1])

@@ -93,6 +93,10 @@ def to_loc(input, is_simple=False):
             weights_initializer=W_init,
             biases_initializer=b_init)
 
+def loc_inv(loc):
+    s, t_x, t_y = tf.split(1, 3, loc)
+    return tf.concat(1, [1./s, -t_x/s, -t_y/s])
+
 if __name__ == '__main__':
     from scipy import ndimage
     import matplotlib.pyplot as plt
@@ -100,6 +104,21 @@ if __name__ == '__main__':
     height, width, num_channels = U.shape
     U = U / 255.
     U = U.reshape(1, height, width, num_channels).astype('float32')
+
+    """
+    U_ = tf.placeholder(tf.float32, [None, height, width, num_channels])
+    theta_ = tf.placeholder(tf.float32, [None, 2])
+    T_ = translate(U_, theta_, height, width, num_channels, height*2, width*2)
+
+    theta = np.array([[200, 300], [4000, 1000]])
+    sess = tf.Session()
+    T = sess.run(T_, {U_:np.tile(U, [2, 1, 1, 1]), theta_:theta})
+
+    plt.figure()
+    plt.imshow(T[0]+T[1])
+    plt.show()
+    """
+
 
     s = -0.5
     t_x = 0.8
@@ -120,3 +139,4 @@ if __name__ == '__main__':
         plt.figure()
         plt.imshow(T_s[0])
         plt.show()
+
