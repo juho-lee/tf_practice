@@ -7,7 +7,7 @@ def gen_grid(lim, width):
             ls.T.reshape(width*width, 1)), axis=1)
 
 from itertools import product
-def batchmat_to_tileimg(X, img_shape, tile_shape):
+def batchmat_to_tileimg(X, img_shape, tile_shape, border=True):
     assert(np.prod(tile_shape) >= len(X))
     assert(X.ndim == 2)
     fig = np.zeros((img_shape[0]*tile_shape[0], img_shape[1]*tile_shape[1]),
@@ -18,9 +18,13 @@ def batchmat_to_tileimg(X, img_shape, tile_shape):
             cell = X[rowind].reshape(img_shape)
             fig[i*img_shape[0]:(i+1)*img_shape[0],
                 j*img_shape[1]:(j+1)*img_shape[1]] = 255*cell
+            if border:
+                fig[(i+1)*img_shape[0]-1,j*img_shape[1]:(j+1)*img_shape[1]] = 255
+                fig[i*img_shape[0]:(i+1)*img_shape[0],(j+1)*img_shape[1]-1] = 255
+
     return PIL.Image.fromarray(fig)
 
-def batchimg_to_tileimg(X, tile_shape, channel_dim=3):
+def batchimg_to_tileimg(X, tile_shape, channel_dim=3, border=True):
     assert(np.prod(tile_shape) >= len(X))
     assert(X.ndim == 4)
     assert(channel_dim==1 or channel_dim==3)
@@ -34,4 +38,8 @@ def batchimg_to_tileimg(X, tile_shape, channel_dim=3):
         if ind < len(X):
             fig[i*img_shape[0]:(i+1)*img_shape[0],
                 j*img_shape[1]:(j+1)*img_shape[1]] = 255*X[ind][0]
+            if border:
+                fig[(i+1)*img_shape[0]-1,j*img_shape[1]:(j+1)*img_shape[1]] = 255
+                fig[i*img_shape[0]:(i+1)*img_shape[0],(j+1)*img_shape[1]-1] = 255
+
     return PIL.Image.fromarray(fig)

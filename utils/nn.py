@@ -8,14 +8,12 @@ flat = tf.contrib.layers.flatten
 def batch_norm(input, is_training, scope, activation_fn=tf.nn.relu):
     return tf.cond(is_training,
         lambda: tf.contrib.layers.batch_norm(input, is_training=True,
-            center=True, scale=True,
-            updates_collections=None,
-            scope=scope, reuse=None,
+            decay=0.999, center=True, scale=True,
+            updates_collections=None, scope=scope, reuse=None,
             activation_fn=activation_fn),
         lambda: tf.contrib.layers.batch_norm(input, is_training=False,
-            center=True, scale=True,
-            updates_collections=None,
-            scope=scope, reuse=True,
+            decay=0.999, center=True, scale=True,
+            updates_collections=None, scope=scope, reuse=True,
             activation_fn=activation_fn))
 
 def linear(input, num_units, **kwargs):
@@ -26,6 +24,17 @@ def fc_bn(input, num_units, is_training, scope,
     out = linear(input, num_units, scope=scope, **kwargs)
     return batch_norm(out, is_training, scope, activation_fn=activation_fn)
 
-
-
+def get_train_op(loss, learning_rate=None, grad_clip=None):
+    if learning_rate is None:
+        optimizer = tf.train.AdamOptimizer()
+    else:
+        optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    if grad_clip is None:
+        train_op = optimizer.minimize(loss)
+    else:
+        gvs = optimizer.compute_gradients(loss)
+        capped_gvs = [(tf.clip_by_value(grad, -grad_clip, grad_clip),
+            var) for grad, var in gvs]
+        train_op = optimizer.apply_gradients(capped_gvs)
+    return train_op
 

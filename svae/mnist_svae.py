@@ -39,7 +39,6 @@ z = gaussian_sample(z_mean, z_log_var)
 w_mean = linear(hid_enc, n_fac)
 w_log_var = linear(hid_enc, n_fac)
 w = rect_gaussian_sample(w_mean, w_log_var)
-
 hid_dec = fc(z, n_hid)
 factors = linear(hid_dec, n_fac*n_in)
 p = tf.slice(w, [0,0], [-1,1]) * tf.slice(factors, [0,0], [-1,n_in])
@@ -53,7 +52,7 @@ n_train_batches = mnist.train.num_examples / batch_size
 n_valid_batches = mnist.validation.num_examples / batch_size
 
 neg_ll = bernoulli_neg_ll(x, p)
-kld_w = rect_gaussian_kld(w_mean, w_log_var, mean0=-1.)
+kld_w = rect_gaussian_kld(w_mean, w_log_var, mean0=-1.5)
 kld_z = gaussian_kld(z_mean, z_log_var)
 loss = neg_ll + kld_w + kld_z
 train_op = tf.train.AdamOptimizer().minimize(loss)

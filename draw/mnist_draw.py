@@ -3,7 +3,7 @@ from tensorflow.examples.tutorials.mnist import input_data
 from utils.prob import *
 from utils.nn import *
 from utils.image import batchmat_to_tileimg
-from attention import *
+from attention_ import *
 import time
 import os
 import matplotlib.pyplot as plt
@@ -71,7 +71,8 @@ att_dec = linear(hid_dec, 5, scope='att_dec')
 w = linear(hid_dec, attunit.read_dim, scope='w')
 c = attunit.write(w, att_dec)
 p[0] = tf.nn.sigmoid(c)
-kld = gaussian_kld(z_mean, z_log_var, reduce_mean=False)
+#kld = gaussian_kld(z_mean, z_log_var, reduce_mean=False)
+kld = gaussian_kld(z_mean, z_log_var)
 
 for t in range(1, T):
     x_err = x - tf.nn.sigmoid(c)
@@ -89,10 +90,11 @@ for t in range(1, T):
     w = linear(hid_dec, attunit.read_dim, scope='w', reuse=True)
     c = c + attunit.write(w, att_dec)
     p[t] = tf.nn.sigmoid(c)
-    kld = kld + gaussian_kld(z_mean, z_log_var, reduce_mean=False)
+    #kld = kld + gaussian_kld(z_mean, z_log_var, reduce_mean=False)
+    kld = kld + gaussian_kld(z_mean, z_log_var)
 
 neg_ll = bernoulli_neg_ll(x, p[-1])
-kld = tf.reduce_mean(kld)
+#kld = tf.reduce_mean(kld)
 loss = neg_ll + kld
 train_op = tf.train.AdamOptimizer().minimize(loss)
 
