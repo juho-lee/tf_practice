@@ -37,4 +37,3 @@ def get_train_op(loss, learning_rate=None, grad_clip=None):
             var) for grad, var in gvs]
         train_op = optimizer.apply_gradients(capped_gvs)
     return train_op
-
