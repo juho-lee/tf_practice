@@ -12,6 +12,10 @@ tf.app.flags.DEFINE_string('save_dir', '../results/mnist/cvae_bn',
         """directory to save models.""")
 tf.app.flags.DEFINE_integer('n_epochs', 20,
         """number of epochs to run""")
+tf.app.flags.DEFINE_integer('n_ch', 16,
+        """number of hidden channels to start""")
+tf.app.flags.DEFINE_integer('ksize', 3,
+        """convolution kernel size in encoder""")
 tf.app.flags.DEFINE_integer('n_lat', 20,
         """number of latent variables""")
 tf.app.flags.DEFINE_boolean('train', True,
@@ -21,30 +25,26 @@ if not os.path.isdir(FLAGS.save_dir):
     os.makedirs(FLAGS.save_dir)
 
 n_lat = FLAGS.n_lat
+n_ch = FLAGS.n_ch
+ksize = FLAGS.ksize
 height = 28
 width = 28
 n_in = height*width
 x = tf.placeholder(tf.float32, shape=[None, n_in])
-is_training = tf.placeholder(tf.bool)
+is_train = tf.placeholder(tf.bool)
 x_img = tf.reshape(x, [-1, height, width, 1])
-hid_enc = batch_norm(conv(x_img, 4, [5, 5], [2, 2], activation_fn=None),
-        is_training, 'hid_enc1')
-hid_enc = batch_norm(conv(hid_enc, 8, [5, 5], [2, 2], activation_fn=None),
-        is_training, 'hid_enc2')
-hid_enc = batch_norm(conv(hid_enc, 16, [5, 5], [2, 2],
-    padding='VALID', activation_fn=None), is_training, 'hid_enc3')
+hid_enc = conv_bn(x_img, n_ch, [ksize, ksize], [2, 2], is_train)
+hid_enc = conv_bn(hid_enc, n_ch*2, [ksize, ksize], [2, 2], is_train)
+hid_enc = conv_bn(hid_enc, n_ch*4, [ksize, ksize], [2, 2], is_train, padding='VALID')
 hid_enc = flat(hid_enc)
 z_mean = linear(hid_enc, n_lat)
 z_log_var = linear(hid_enc, n_lat)
 z = gaussian_sample(z_mean, z_log_var)
-hid_dec = fc_bn(z, 144, is_training, 'hid_dec1')
-hid_dec = tf.reshape(hid_dec, [-1, 3, 3, 16])
-hid_dec = batch_norm(deconv(hid_dec, 8, [3, 3], [2, 2],
-    padding='VALID', activation_fn=None), is_training, 'hid_dec2')
-hid_dec = batch_norm(deconv(hid_dec, 4, [2, 2], [2, 2], activation_fn=None),
-        is_training, 'hid_dec3')
-p = flat(batch_norm(deconv(hid_dec, 1, [2, 2], [2, 2], activation_fn=None),
-    is_training, 'p', activation_fn=tf.nn.sigmoid))
+hid_dec = fc(z, n_ch*4*3*3)
+hid_dec = tf.reshape(hid_dec, [-1, 3, 3, n_ch*4])
+hid_dec = deconv_bn(hid_dec, n_ch*2, [3, 3], [2, 2], is_train, padding='VALID')
+hid_dec = deconv_bn(hid_dec, n_ch, [2, 2], [2, 2], is_train)
+p = flat(deconv_bn(hid_dec, 1, [2, 2], [2, 2], is_train, activation_fn=tf.nn.sigmoid))
 
 mnist = input_data.read_data_sets("data/mnist")
 batch_size = 100
@@ -69,7 +69,7 @@ def train():
         for j in range(n_train_batches):
             batch_x, _ = mnist.train.next_batch(batch_size)
             _, batch_neg_ll, batch_kld = \
-                    sess.run([train_op, neg_ll, kld], {x:batch_x, is_training:True})
+                    sess.run([train_op, neg_ll, kld], {x:batch_x, is_train:True})
             train_neg_ll += batch_neg_ll
             train_kld += batch_kld
         train_neg_ll /= n_train_batches
@@ -79,7 +79,7 @@ def train():
         valid_kld = 0.
         for j in range(n_valid_batches):
             batch_x, _ = mnist.validation.next_batch(batch_size)
-            batch_neg_ll, batch_kld = sess.run([neg_ll, kld], {x:batch_x, is_training:False})
+            batch_neg_ll, batch_kld = sess.run([neg_ll, kld], {x:batch_x, is_train:False})
             valid_neg_ll += batch_neg_ll
             valid_kld += batch_kld
         valid_neg_ll /= n_valid_batches
@@ -106,11 +106,11 @@ def test():
     fig = plt.figure('reconstructed')
     plt.gray()
     plt.axis('off')
-    p_recon = sess.run(p, {x:batch_x, is_training:False})
+    p_recon = sess.run(p, {x:batch_x, is_train:False})
     plt.imshow(batchmat_to_tileimg(p_recon, (height, width), (10, 10)))
     fig.savefig(FLAGS.save_dir+'/reconstructed.png')
 
-    p_gen = sess.run(p, {z:np.random.normal(size=(100, n_lat)), is_training:False})
+    p_gen = sess.run(p, {z:np.random.normal(size=(100, n_lat)), is_train:False})
     I_gen = batchmat_to_tileimg(p_gen, (height, width), (10, 10))
     fig = plt.figure('generated')
     plt.gray()

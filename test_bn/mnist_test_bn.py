@@ -21,9 +21,9 @@ acc = tf.reduce_sum(tf.cast(correct, tf.float32))
 
 # with BN
 is_tr = tf.placeholder(tf.bool)
-net_BN = fc_bn(x, 400, is_tr, 'fc_bn1')
-net_BN = fc_bn(net_BN, 100, is_tr, 'fc_bn2')
-net_BN = fc_bn(net_BN, 10, is_tr, 'fc_bn3', activation_fn=None)
+net_BN = fc_bn(x, 400, is_tr)
+net_BN = fc_bn(net_BN, 100, is_tr)
+net_BN = fc_bn(net_BN, 10, is_tr, activation_fn=None)
 cent_BN = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(net_BN, y))
 train_op_BN = get_train_op(cent_BN)
 correct_BN = tf.equal(tf.argmax(y, 1), tf.argmax(net_BN, 1))
@@ -31,7 +31,7 @@ acc_BN = tf.reduce_sum(tf.cast(correct_BN, tf.float32))
 
 sess = tf.Session()
 sess.run(tf.initialize_all_variables())
-n_epochs = 4
+n_epochs = 10
 print 'without BN:'
 for i in range(n_epochs):
     train_cent = 0.

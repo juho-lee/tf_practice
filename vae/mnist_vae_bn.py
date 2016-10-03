@@ -28,13 +28,13 @@ height = 28
 width = 28
 n_in = height*width
 x = tf.placeholder(tf.float32, shape=[None, n_in])
-is_training = tf.placeholder(tf.bool)
-hid_enc = fc_bn(x, n_hid, is_training, 'hid_enc')
+is_train = tf.placeholder(tf.bool)
+hid_enc = fc_bn(x, n_hid, is_train)
 z_mean = linear(hid_enc, n_lat)
 z_log_var = linear(hid_enc, n_lat)
 z = gaussian_sample(z_mean, z_log_var)
-hid_dec = fc_bn(z, n_hid, is_training, 'hid_dec')
-p = fc_bn(hid_dec, n_in, is_training, 'p', activation_fn=tf.nn.sigmoid)
+hid_dec = fc_bn(z, n_hid, is_train)
+p = fc_bn(hid_dec, n_in, is_train, activation_fn=tf.nn.sigmoid)
 
 mnist = input_data.read_data_sets("data/mnist")
 batch_size = 100
@@ -59,7 +59,7 @@ def train():
         for j in range(n_train_batches):
             batch_x, _ = mnist.train.next_batch(batch_size)
             _, batch_neg_ll, batch_kld = \
-                    sess.run([train_op, neg_ll, kld], {x:batch_x, is_training:True})
+                    sess.run([train_op, neg_ll, kld], {x:batch_x, is_train:True})
             train_neg_ll += batch_neg_ll
             train_kld += batch_kld
         train_neg_ll /= n_train_batches
@@ -69,7 +69,7 @@ def train():
         valid_kld = 0.
         for j in range(n_valid_batches):
             batch_x, _ = mnist.validation.next_batch(batch_size)
-            batch_neg_ll, batch_kld = sess.run([neg_ll, kld], {x:batch_x, is_training:False})
+            batch_neg_ll, batch_kld = sess.run([neg_ll, kld], {x:batch_x, is_train:False})
             valid_neg_ll += batch_neg_ll
             valid_kld += batch_kld
         valid_neg_ll /= n_valid_batches
@@ -96,11 +96,11 @@ def test():
     fig = plt.figure('reconstructed')
     plt.gray()
     plt.axis('off')
-    p_recon = sess.run(p, {x:batch_x, is_training:False})
+    p_recon = sess.run(p, {x:batch_x, is_train:False})
     plt.imshow(batchmat_to_tileimg(p_recon, (height, width), (10, 10)))
     fig.savefig(FLAGS.save_dir+'/reconstructed.png')
 
-    p_gen = sess.run(p, {z:np.random.normal(size=(100, n_lat)), is_training:False})
+    p_gen = sess.run(p, {z:np.random.normal(size=(100, n_lat)), is_train:False})
     I_gen = batchmat_to_tileimg(p_gen, (height, width), (10, 10))
     fig = plt.figure('generated')
     plt.gray()
