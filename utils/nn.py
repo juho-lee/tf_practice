@@ -38,17 +38,17 @@ def fc_bn(input, num_units, is_train, scope=None, decay=0.9,
     out = out if activation_fn is None else activation_fn(out)
     return out
 
-def conv_bn(input, num_ch, filter_size, stride, is_train,
+def conv_bn(input, num_ch, filter_size, is_train,
         scope=None, decay=0.9, activation_fn=tf.nn.relu, **kwargs):
-    out = conv(input, num_ch, filter_size, stride,
+    out = conv(input, num_ch, filter_size,
             scope=scope, activation_fn=None, **kwargs)
     out = batch_norm(out, is_train, scope=scope, decay=decay)
     out = out if activation_fn is None else activation_fn(out)
     return out
 
-def deconv_bn(input, num_ch, filter_size, stride, is_train,
+def deconv_bn(input, num_ch, filter_size, is_train,
         scope=None, decay=0.9, activation_fn=tf.nn.relu, **kwargs):
-    out = deconv(input, num_ch, filter_size, stride,
+    out = deconv(input, num_ch, filter_size,
             scope=scope, activation_fn=None, **kwargs)
     out = batch_norm(out, is_train, scope=scope, decay=decay)
     out = out if activation_fn is None else activation_fn(out)
