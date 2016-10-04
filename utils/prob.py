@@ -47,3 +47,14 @@ def bernoulli_neg_ll(x, p, tol=1.0e-10, reduce_mean=True):
     if reduce_mean:
         neg_ll = tf.reduce_mean(neg_ll)
     return neg_ll
+
+def unit_gaussian_neg_ll(x):
+    c = -0.5*np.log(2*np.pi)
+    neg_ll = tf.reduce_sum(-c + 0.5*tf.square(x), 1)
+    return tf.reduce_mean(neg_ll)
+
+def gaussian_neg_ll(x, mean, log_var):
+    c = -0.5*np.log(2*np.pi)
+    var = tf.exp(log_var)
+    neg_ll = tf.reduce_sum(-c + 0.5*log_var + 0.5*tf.square(x - mean) / var, 1)
+    return tf.reduce_mean(neg_ll)
