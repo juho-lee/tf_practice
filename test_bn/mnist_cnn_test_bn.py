@@ -21,22 +21,37 @@ net = linear(flat(net), 10)
 cent = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(net, y))
 train_op = get_train_op(cent)
 correct = tf.equal(tf.argmax(y, 1), tf.argmax(net, 1))
-acc = tf.reduce_sum(tf.cast(correct, tf.float32))
+acc = tf.reduce_mean(tf.cast(correct, tf.float32))
 
 # with BN
 is_tr = tf.placeholder(tf.bool)
+net_BN = conv_bn(x_img, 32, [5, 5], is_tr)
+net_BN = pool(net_BN, [3, 3], [2, 2])
+net_BN = conv_bn(net_BN, 64, [3, 3], is_tr)
+net_BN = conv_bn(net_BN, 64, [3, 3], is_tr)
+net_BN = pool(net_BN, [3, 3], [2, 2])
+net_BN = conv_bn(net_BN, 128, [3, 3], is_tr)
+net_BN = conv_bn(net_BN, 10, [1, 1], is_tr)
+net_BN = fc_bn(flat(net_BN), 128, is_tr)
+net_BN = fc_bn(net_BN, 10, is_tr, activation_fn=None)
+cent_BN = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(net_BN, y))
+
+"""
 net_BN = pool(conv_bn(x_img, 16, [3, 3], is_tr), [2, 2])
 net_BN = pool(conv_bn(net_BN, 32, [3, 3], is_tr), [2, 2])
 net_BN = pool(conv_bn(net_BN, 64, [3, 3], is_tr), [2, 2])
 net_BN = fc_bn(flat(net_BN), 10, is_tr, activation_fn=None)
 cent_BN = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(net_BN, y))
+"""
+
 train_op_BN = get_train_op(cent_BN)
 correct_BN = tf.equal(tf.argmax(y, 1), tf.argmax(net_BN, 1))
-acc_BN = tf.reduce_sum(tf.cast(correct_BN, tf.float32))
+acc_BN = tf.reduce_mean(tf.cast(correct_BN, tf.float32))
 
 sess = tf.Session()
 sess.run(tf.initialize_all_variables())
-n_epochs = 10
+n_epochs = 5
+
 print 'without BN:'
 for i in range(n_epochs):
     train_cent = 0.

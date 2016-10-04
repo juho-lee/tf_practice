@@ -4,6 +4,7 @@ conv = tf.contrib.layers.convolution2d
 pool = tf.contrib.layers.max_pool2d
 deconv = tf.contrib.layers.convolution2d_transpose
 flat = tf.contrib.layers.flatten
+dropout = tf.contrib.layers.dropout
 
 def linear(input, num_units, **kwargs):
     return fc(input, num_units, activation_fn=None, **kwargs)
@@ -54,16 +55,20 @@ def deconv_bn(input, num_ch, filter_size, is_train,
     out = out if activation_fn is None else activation_fn(out)
     return out
 
-def get_train_op(loss, learning_rate=None, grad_clip=None):
+def get_train_op(loss, var_list=None, learning_rate=None, grad_clip=None):
     if learning_rate is None:
         optimizer = tf.train.AdamOptimizer()
     else:
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     if grad_clip is None:
-        train_op = optimizer.minimize(loss)
+        train_op = optimizer.minimize(loss, var_list)
     else:
-        gvs = optimizer.compute_gradients(loss)
-        capped_gvs = [(tf.clip_by_value(grad, -grad_clip, grad_clip),
-            var) for grad, var in gvs]
+        gvs = optimizer.compute_gradients(loss, var_list)
+        def clip(grad):
+            if grad is None:
+                return grad
+            else:
+                return tf.clip_by_value(grad, -grad_clip, grad_clip)
+        capped_gvs = [(clip(grad), var) for grad, var in gvs]
         train_op = optimizer.apply_gradients(capped_gvs)
     return train_op
