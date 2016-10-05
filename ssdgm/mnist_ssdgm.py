@@ -35,15 +35,6 @@ hid = tf.nn.relu(batch_norm(linear(z, 500)+linear(y, 500), is_train))
 hid = fc_bn(hid, 500, is_train)
 p_x = fc(hid, n_in, activation_fn=tf.nn.sigmoid)
 
-"""
-hid = tf.nn.relu(linear(x, 500) + linear(y, 500))
-q_z_mean = linear(hid, 50)
-q_z_log_var = linear(hid, 50)
-z = gaussian_sample(q_z_mean, q_z_log_var)
-hid = tf.nn.relu(linear(z, 500) + linear(y, 500))
-p_x = fc(hid, n_in, activation_fn=tf.nn.sigmoid)
-"""
-
 loss = bernoulli_neg_ll(x, p_x) + gaussian_kld(q_z_mean, q_z_log_var)
 
 mnist = input_data.read_data_sets("data/mnist", one_hot=True)

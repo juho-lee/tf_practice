@@ -36,24 +36,24 @@ def batch_norm(input, is_train, scope=None, reuse=None, decay=0.9):
         return tf.nn.batch_normalization(input, mean, var, beta, gamma, 1e-3)
 
 def fc_bn(input, num_units, is_train,
-        scope=None, reuse=None,
-        decay=0.9, activation_fn=tf.nn.relu, **kwargs):
+        scope=None, reuse=None, decay=0.9,
+        activation_fn=tf.nn.relu, **kwargs):
     out = linear(input, num_units, **kwargs)
     out = batch_norm(out, is_train, scope=scope, reuse=reuse, decay=decay)
     out = out if activation_fn is None else activation_fn(out)
     return out
 
 def conv_bn(input, num_ch, filter_size, is_train,
-        scope=None, reuse=None,
-        decay=0.9, activation_fn=tf.nn.relu, **kwargs):
+        scope=None, reuse=None, decay=0.9,
+        activation_fn=tf.nn.relu, **kwargs):
     out = conv(input, num_ch, filter_size, activation_fn=None, **kwargs)
     out = batch_norm(out, is_train, scope=scope, reuse=reuse, decay=decay)
     out = out if activation_fn is None else activation_fn(out)
     return out
 
 def deconv_bn(input, num_ch, filter_size, is_train,
-        scope=None, reuse=None,
-        decay=0.9, activation_fn=tf.nn.relu, **kwargs):
+        scope=None, reuse=None, decay=0.9,
+        activation_fn=tf.nn.relu, **kwargs):
     out = deconv(input, num_ch, filter_size, activation_fn=None, **kwargs)
     out = batch_norm(out, is_train, scope=scope, reuse=reuse, decay=decay)
     out = out if activation_fn is None else activation_fn(out)
