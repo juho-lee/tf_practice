@@ -33,18 +33,23 @@ n_in = height*width
 x = tf.placeholder(tf.float32, shape=[None, n_in])
 is_train = tf.placeholder(tf.bool)
 x_img = tf.reshape(x, [-1, height, width, 1])
-hid_enc = conv_bn(x_img, n_ch, [ksize, ksize], [2, 2], is_train)
-hid_enc = conv_bn(hid_enc, n_ch*2, [ksize, ksize], [2, 2], is_train)
-hid_enc = conv_bn(hid_enc, n_ch*4, [ksize, ksize], [2, 2], is_train, padding='VALID')
+hid_enc = conv_bn(x_img, n_ch, [ksize, ksize], is_train, stride=[2, 2],
+        scope='conv_bn_0')
+hid_enc = conv_bn(hid_enc, n_ch*2, [ksize, ksize], is_train, stride=[2, 2],
+        scope='conv_bn_1')
+hid_enc = conv_bn(hid_enc, n_ch*4, [ksize, ksize], is_train, stride=[2, 2],
+        scope='conv_bn_2', padding='VALID')
 hid_enc = flat(hid_enc)
 z_mean = linear(hid_enc, n_lat)
 z_log_var = linear(hid_enc, n_lat)
 z = gaussian_sample(z_mean, z_log_var)
-hid_dec = fc(z, n_ch*4*3*3)
+hid_dec = fc_bn(z, n_ch*4*3*3, is_train, scope='fc_bn_0')
 hid_dec = tf.reshape(hid_dec, [-1, 3, 3, n_ch*4])
-hid_dec = deconv_bn(hid_dec, n_ch*2, [3, 3], [2, 2], is_train, padding='VALID')
-hid_dec = deconv_bn(hid_dec, n_ch, [2, 2], [2, 2], is_train)
-p = flat(deconv_bn(hid_dec, 1, [2, 2], [2, 2], is_train, activation_fn=tf.nn.sigmoid))
+hid_dec = deconv_bn(hid_dec, n_ch*2, [3, 3], is_train, stride=[2, 2],
+        scope='deconv_bn_0', padding='VALID')
+hid_dec = deconv_bn(hid_dec, n_ch, [2, 2], is_train, stride=[2, 2],
+        scope='deconv_bn_1')
+p = flat(deconv(hid_dec, 1, [2, 2], [2, 2], activation_fn=tf.nn.sigmoid))
 
 mnist = input_data.read_data_sets("data/mnist")
 batch_size = 100
