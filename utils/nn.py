@@ -54,7 +54,7 @@ def conv_bn(input, num_ch, filter_size, is_train,
 def deconv_bn(input, num_ch, filter_size, is_train,
         scope=None, reuse=None, decay=0.9,
         activation_fn=tf.nn.relu, **kwargs):
-    out = deconv(input, num_ch, filter_size, activation_fn=None, **kwargs)
+    out = deconv(input, num_ch, filter_size, activation_fn=None, scope=scope, reuse=reuse, **kwargs)
     out = batch_norm(out, is_train, scope=scope, reuse=reuse, decay=decay)
     out = out if activation_fn is None else activation_fn(out)
     return out
