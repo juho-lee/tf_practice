@@ -6,23 +6,23 @@ deconv = tf.contrib.layers.convolution2d_transpose
 flat = tf.contrib.layers.flatten
 dropout = tf.contrib.layers.dropout
 
-def linear(input, num_units, **kwargs):
-    return fc(input, num_units, activation_fn=None, **kwargs)
+def linear(inputs, num_outputs, **kwargs):
+    return fc(inputs, num_outputs, activation_fn=None, **kwargs)
 
-def batch_norm(input, is_train, scope=None, reuse=None, decay=0.9):
-    shape = input.get_shape()
-    num_out = shape[-1]
-
-    with tf.variable_op_scope([input], scope, 'BN', reuse=reuse):
-        beta = tf.get_variable('beta', [num_out],
-                initializer=tf.constant_initializer(0.0),
+def batch_norm(inputs, is_training,
+        scope=None, reuse=None, decay=0.9):
+    shape = inputs.get_shape()
+    num_outputs = shape[-1]
+    with tf.variable_scope(scope, 'BN', [inputs], reuse=reuse):
+        beta = tf.get_variable('beta', [num_outputs],
+                initializer=tf.constant_initializer(0.),
                 trainable=True)
-        gamma = tf.get_variable('gamma', [num_out],
-                initializer=tf.constant_initializer(1.0),
+        gamma = tf.get_variable('gamma', [num_outputs],
+                initializer=tf.constant_initializer(1.),
                 trainable=True)
 
-        batch_mean, batch_var = tf.nn.moments(input, [0,1,2], name='moments') \
-                if len(shape)==4 else tf.nn.moments(input, [0], name='moments')
+        batch_mean, batch_var = tf.nn.moments(inputs, [0,1,2], name='moments') \
+                if shape.ndims == 4 else tf.nn.moments(inputs, [0], name='moments')
         ema = tf.train.ExponentialMovingAverage(decay=decay)
 
         def mean_var_with_update():
@@ -30,46 +30,41 @@ def batch_norm(input, is_train, scope=None, reuse=None, decay=0.9):
             with tf.control_dependencies([ema_apply_op]):
                 return tf.identity(batch_mean), tf.identity(batch_var)
 
-        mean, var = tf.cond(is_train,
+        mean, var = tf.cond(is_training,
                 mean_var_with_update,
                 lambda: (ema.average(batch_mean), ema.average(batch_var)))
-        return tf.nn.batch_normalization(input, mean, var, beta, gamma, 1e-3)
+        return tf.nn.batch_normalization(inputs, mean, var, beta, gamma, 1e-3)
 
-def fc_bn(input, num_units, is_train,
-        scope=None, reuse=None, decay=0.9,
-        activation_fn=tf.nn.relu, **kwargs):
-    out = linear(input, num_units, **kwargs)
-    out = batch_norm(out, is_train, scope=scope, reuse=reuse, decay=decay)
+def fc_bn(inputs, num_outputs, is_training, 
+        decay=0.9, **kwargs):
+    activation_fn = kwargs.pop('activation_fn', tf.nn.relu)
+    out = linear(inputs, num_outputs, **kwargs)
+    out = batch_norm(out, is_training, 
+            scope=kwargs.get('scope'), reuse=kwargs.get('reuse'), decay=decay)
     out = out if activation_fn is None else activation_fn(out)
     return out
 
-def conv_bn(input, num_ch, filter_size, is_train,
-        scope=None, reuse=None, decay=0.9,
-        activation_fn=tf.nn.relu, **kwargs):
-    out = conv(input, num_ch, filter_size, activation_fn=None, **kwargs)
-    out = batch_norm(out, is_train, scope=scope, reuse=reuse, decay=decay)
+def conv_bn(inputs, num_outputs, kernel_size, is_training,
+        decay=0.9, **kwargs):
+    activation_fn = kwargs.pop('activation_fn', tf.nn.relu)
+    out = conv(inputs, num_outputs, kernel_size, activation_fn=None, **kwargs)
+    out = batch_norm(out, is_training,
+            scope=kwargs.get('scope'), reuse=kwargs.get('reuse'), decay=decay)
     out = out if activation_fn is None else activation_fn(out)
     return out
 
-def deconv_bn(input, num_ch, filter_size, is_train,
-        scope=None, reuse=None, decay=0.9,
-        activation_fn=tf.nn.relu, **kwargs):
-    out = deconv(input, num_ch, filter_size, activation_fn=None, scope=scope, reuse=reuse, **kwargs)
-    out = batch_norm(out, is_train, scope=scope, reuse=reuse, decay=decay)
+def deconv_bn(inputs, num_outputs, kernel_size, is_training,
+        decay=0.9, **kwargs):
+    activation_fn = kwargs.pop('activation_fn', tf.nn.relu)
+    out = deconv(inputs, num_outputs, kernel_size, activation_fn=None, **kwargs)
+    out = batch_norm(out, is_training,
+            scope=kwargs.get('scope'), reuse=kwargs.get('reuse'), decay=decay)
     out = out if activation_fn is None else activation_fn(out)
     return out
 
 def get_train_op(loss,
-        var_list=None,
-        grad_clip=None,
-        learning_rate=0.001,
-        beta1=0.9,
-        beta2=0.999):
-
-    optimizer = tf.train.AdamOptimizer(
-            learning_rate=learning_rate,
-            beta1=beta1,
-            beta2=beta2)
+        var_list=None, grad_clip=None, **kwargs):
+    optimizer = tf.train.AdamOptimizer(**kwargs)
     if grad_clip is None:
         return optimizer.minimize(loss, var_list=var_list)
     else:
