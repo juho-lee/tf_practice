@@ -5,6 +5,7 @@ pool = tf.contrib.layers.max_pool2d
 deconv = tf.contrib.layers.convolution2d_transpose
 flat = tf.contrib.layers.flatten
 dropout = tf.contrib.layers.dropout
+one_hot = tf.contrib.layers.one_hot_encoding
 
 def linear(inputs, num_outputs, **kwargs):
     return fc(inputs, num_outputs, activation_fn=None, **kwargs)
