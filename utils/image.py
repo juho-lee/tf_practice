@@ -43,3 +43,13 @@ def batchimg_to_tileimg(X, tile_shape, channel_dim=3, border=True):
                 fig[i*img_shape[0]:(i+1)*img_shape[0],(j+1)*img_shape[1]-1] = 255
 
     return PIL.Image.fromarray(fig)
+
+import matplotlib.pyplot as plt
+def create_fig(name, gray=True, axisoff=True):
+    fig = plt.figure(name)
+    if gray:
+        plt.gray()
+    if axisoff:
+        plt.axis('off')
+    return fig
+        

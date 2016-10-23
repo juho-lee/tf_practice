@@ -11,6 +11,7 @@ def gaussian_kld(mean, log_var, reduce_mean=True):
         kld = tf.reduce_mean(kld)
     return kld
 
+# rectified gaussian
 def rect_gaussian_sample(mean, log_var):
     eps = tf.random_normal(tf.shape(mean))
     return tf.nn.relu(mean + tf.exp(0.5*log_var)*eps)

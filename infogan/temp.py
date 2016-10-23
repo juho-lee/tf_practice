@@ -10,7 +10,7 @@ import os
 import matplotlib.pyplot as plt
 
 FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_string('save_dir', '../results/mnist/infogan',
+tf.app.flags.DEFINE_string('save_dir', './temp',
         """directory to save models.""")
 tf.app.flags.DEFINE_integer('n_epochs', 5,
         """number of epochs to run""")
@@ -104,10 +104,21 @@ train_G = get_train_op(L_G+lam*L_I, var_list=Gen_vars+Rec_vars, grad_clip=10.,
         learning_rate=learning_rate, beta1=0.5)
 
 # load data
+from utils.data import load_pkl
+train_x, test_x = load_pkl('data/dmnist/dmnist_attn.pkl.gz')
+train_x = train_x[range(len(train_x)), 0:784]
+test_x = test_x[range(len(test_x)), 0:784]
+batch_size = 100
+n_train_batches = len(train_x) / batch_size
+n_test_batches = len(test_x) / batch_size
+
+
+"""
 mnist = input_data.read_data_sets('data/mnist', one_hot=True)
 batch_size = 100
 n_train_batches = mnist.train.num_examples / batch_size
 n_test_batches = mnist.test.num_examples / batch_size
+"""
 
 saver = tf.train.Saver()
 sess = tf.Session()
@@ -124,7 +135,8 @@ def train():
         start = time.time()
         for j in range(n_train_batches):
             # train discriminator
-            batch_x, _ = mnist.train.next_batch(batch_size)
+            #batch_x, _ = mnist.train.next_batch(batch_size)
+            batch_x = train_x[j*batch_size:(j+1)*batch_size]
             batch_c = gen_code(batch_size)
             batch_z = gen_noise(batch_size)
             feed_dict = {x:batch_x, c:batch_c, z:batch_z, 
@@ -145,7 +157,8 @@ def train():
 
         test_Logger.clear()
         for j in range(n_test_batches):
-            batch_x, _ = mnist.test.next_batch(batch_size)
+            #batch_x, _ = mnist.test.next_batch(batch_size)
+            batch_x = test_x[j*batch_size:(j+1)*batch_size]
             batch_c = gen_code(batch_size)
             batch_z = gen_noise(batch_size)
             feed_dict = {x:batch_x, c:batch_c, 
