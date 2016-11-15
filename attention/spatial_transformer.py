@@ -95,7 +95,7 @@ def padded_spatial_transformer(U, theta, out_height, out_width):
 
 # last layer of localization net
 from tensorflow.contrib import layers
-def to_loc(inputs, s_max=None, t_max=None, is_simple=False):
+def get_theta(inputs, s_max=None, t_max=None, is_simple=False):
     if len(inputs.get_shape()) == 4:
         inputs = layers.flatten(inputs)
     num_inputs = inputs.get_shape()[1]

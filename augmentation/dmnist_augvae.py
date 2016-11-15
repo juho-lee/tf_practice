@@ -34,7 +34,7 @@ def l2norm(a, b):
     return tf.reduce_mean(tf.reduce_sum(tf.square(a-b), 1))
 
 def gen_noise(batch_size):
-    return qz.prior_sample((batch_size, z_dim))
+    return qz.prior_sample(batch_size)
 
 wid = 56
 n_cls = 14
@@ -54,7 +54,7 @@ logits, ft0, ft1 = classify(att0, att1, ft_dim, n_cls, cls_is_tr)
 
 vae_is_tr = tf.placeholder(tf.bool)
 from utils.distribution import *
-qz = Gaussian()
+qz = Gaussian(z_dim)
 px = Bernoulli()
 z0, kld0 = encode(att0, z_dim, qz, vae_is_tr)
 recon0, neg_ll0 = decode(att0, z0, ft0, px, vae_is_tr)
@@ -207,7 +207,7 @@ def visualize():
     plt.imshow(batchimg_to_tileimg(baug0, (10, 10)))
 
     plt.show()
-   
+
 def main(argv=None):
     if FLAGS.mode == 0:
         cls_train()

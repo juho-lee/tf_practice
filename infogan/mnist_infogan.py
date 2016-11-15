@@ -28,12 +28,6 @@ z_dim = 64
 height = 28
 width = 28
 
-# leaky relu
-def lrelu(x, leak=0.1):
-    f1 = 0.5*(1 + leak)
-    f2 = 0.5*(1 - leak)
-    return tf.nn.relu(x)
-
 is_training = tf.placeholder(tf.bool)
 def discriminate(x, reuse=None):
     with tf.variable_scope('Dis', reuse=reuse):

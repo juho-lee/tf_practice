@@ -8,7 +8,7 @@ class Distribution(object):
     def mean(self, param, **kwargs):
         raise NotImplementedError
 
-    def prior_sample(self, shape, **kwargs):
+    def prior_sample(self, size, **kwargs):
         raise NotImplementedError
 
     def sample(self, param, **kwargs):
@@ -27,9 +27,9 @@ class Bernoulli(Distribution):
     def mean(self, param, **kwargs):
         return param.get('p')
 
-    def prior_sample(self, shape, **kwargs):
+    def prior_sample(self, size, **kwargs):
         p0 = kwargs.pop('p0', 0.3)
-        return np.random.binomial(1, p0, shape)
+        return np.random.binomial(1, p0, size)
         
         """
         return tf.select(tf.random_uniform(shape) < p0,
@@ -65,10 +65,10 @@ class Categorical(Distribution):
     def mean(self, param, **kwargs):
         return param.get('p')
 
-    def prior_sample(self, shape, **kwargs):
-        x_int =  np.random.randint(0, self.dim, shape).astype(np.int32)
-        x = np.zeros((shape, self.dim))
-        x[range(shape), x_int] = 1.
+    def prior_sample(self, size, **kwargs):
+        x_int =  np.random.randint(0, self.dim, size).astype(np.int32)
+        x = np.zeros((size, self.dim))
+        x[range(size), x_int] = 1.
         return x
 
     def log_likel(self, x, param, **kwargs):
@@ -94,10 +94,10 @@ class Multinomial(Distribution):
     def mean(self, param, **kwargs):
         return param.get('p')
 
-    def prior_sample(self, shape, **kwargs):
-        x = np.zeros((shape, self.dim))
+    def prior_sample(self, size, **kwargs):
+        x = np.zeros((size, self.dim))
         for i in range(self.ntrials):
-            x[range(shape), np.random.randint(0, self.dim, shape)] += 1.
+            x[range(size), np.random.randint(0, self.dim, size)] += 1.
         return x
 
     def log_likel(self, x, param, **kwargs):
@@ -108,31 +108,30 @@ class Multinomial(Distribution):
         return ll
 
 class Gaussian(Distribution):
-    def __init__(self, **kwargs):
+    def __init__(self, dim, **kwargs):
         super(Gaussian, self).__init__()
+        self.dim = dim
         self.fix_var = kwargs.pop('fix_var', False)
 
     def get_param(self, net_out, **kwargs):
         shape = net_out.get_shape()
-        assert(shape.ndims == 2)                
-
+        assert(shape.ndims == 2)
+        
         if self.fix_var:
-            dim = tf.pack(shape[1])
+            assert(shape[1] == self.dim)
             param = {'mean': net_out}
             return param
         else: 
-            assert(shape[1] % 2 == 0)
-            dim = tf.pack(shape[1] / 2)
-            param = {'mean': tf.slice(net_out, [0, 0], [-1, dim]), 
-                    'log_var': tf.slice(net_out, [0, dim], [-1, dim])}
+            assert(shape[1] == 2*self.dim)
+            param = {'mean': tf.slice(net_out, [0, 0], [-1, self.dim]), 
+                    'log_var': tf.slice(net_out, [0, self.dim], [-1, self.dim])}
             return param
 
     def mean(self, param, **kwargs):
         return param.get('mean')
 
-    def prior_sample(self, shape, **kwargs):
-        return np.random.normal(size=shape).astype('float32')
-        # return tf.random_normal(shape)
+    def prior_sample(self, size, **kwargs):
+        return np.random.normal(size=(size, self.dim))
 
     def sample(self, param, **kwargs):        
         mean = param.get('mean')
@@ -147,6 +146,7 @@ class Gaussian(Distribution):
         var = tf.exp(log_var)
         ll = tf.reduce_sum(c - 0.5*log_var - 0.5*tf.square(x - mean) / var, 1)
         ll = tf.reduce_mean(ll)
+        return ll
 
     def kld(self, param, **kwargs):
         mean = param.get('mean')
@@ -156,8 +156,9 @@ class Gaussian(Distribution):
         return kld
 
 class RectGaussian(Distribution):
-    def __init__(self, **kwargs):
+    def __init__(self, dim, **kwargs):
         super(RectGaussian, self).__init__()
+        self.dim = dim
         self.fix_var = kwargs.pop('fix_var', False)
         self.mean0 = kwargs.pop('mean0', 0.)
         self.log_var0 = kwargs.pop('log_var0', 0.)
@@ -165,25 +166,24 @@ class RectGaussian(Distribution):
 
     def get_param(self, net_out, **kwargs):
         shape = net_out.get_shape()
-        assert(shape.ndims == 2)                
 
         if self.fix_var:
+            assert(shape[1] == self.dim)
             param = {'mean': net_out}
             return param
         else: 
-            assert(shape[1] % 2 == 0)
-            dim = tf.pack(shape[1] / 2)
-            param = {'mean': tf.slice(net_out, [0, 0], [-1, dim]), 
-                    'log_var': tf.slice(net_out, [0, dim], [-1, dim])}
+            assert(shape[1] == 2*self.dim)
+            param = {'mean': tf.slice(net_out, [0, 0], [-1, self.dim]), 
+                    'log_var': tf.slice(net_out, [0, dim], [-1, self.dim])}
             return param
 
     def mean(self, param, **kwargs):
         return param.get('mean')
 
-    def prior_sample(self, shape, **kwargs):        
-        x = np.random.normal(size=shape, loc=self.mean0, scale=self.std0)
+    def prior_sample(self, size, **kwargs):        
+        x = np.random.normal(size=(size, self.dim), 
+                loc=self.mean0, scale=self.std0)
         return 0.5*(x + abs(x))
-        #return tf.nn.relu(tf.random_normal(shape, mean0=mean0))
 
     def sample(self, param, **kwargs):
         mean = param.get('mean')

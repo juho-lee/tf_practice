@@ -51,7 +51,7 @@ cent, acc = get_classification_loss(logits, y_one_hot)
 # variational autoencoder
 from utils.distribution import *
 px = Bernoulli()
-qz = Gaussian()
+qz = Gaussian(z_dim)
 vae_is_tr = tf.placeholder(tf.bool)
 
 # autoencode first feature
@@ -173,8 +173,8 @@ def visualize():
     for i in range(n_test_batches):
         batch_idx = range(i*batch_size, (i+1)*batch_size)
         feed_dict = {x:test_x[batch_idx], y:test_y[batch_idx],
-                nz0:qz.prior_sample((batch_size, z_dim)),
-                nz1:qz.prior_sample((batch_size, z_dim)),
+                nz0:qz.prior_sample(batch_size),
+                nz1:qz.prior_sample(batch_size),
                 vae_is_tr:False}
         aug_acc_val += sess.run(aacc, feed_dict)
     print aug_acc_val/n_test_batches
@@ -232,8 +232,8 @@ def one_shot_augmentation():
         # augment
         ax0, ax1 = sess.run([flat(aug0), flat(aug1)],
                 {feat0:ft0, feat1:ft1,
-                    nz0:qz.prior_sample((n_aug_per_cls, z_dim)),
-                    nz1:qz.prior_sample((n_aug_per_cls, z_dim)),
+                    nz0:qz.prior_sample(n_aug_per_cls),
+                    nz1:qz.prior_sample(n_aug_per_cls),
                     vae_is_tr:False})
         idx = range(i*n_aug_per_cls, (i+1)*n_aug_per_cls)
         aug_x0[idx] = ax0
@@ -260,7 +260,7 @@ def one_shot_augmentation():
 
 def one_shot_learning():
     # load data
-    n_examples_per_cls = 5
+    n_examples_per_cls = 1
     filename = 'data/dmnist/dmnist_aug_' + str(n_examples_per_cls) + '.pkl.gz'
     aug, tr, te = load_pkl(filename)
     aug_x0, aug_x1, aug_y = aug

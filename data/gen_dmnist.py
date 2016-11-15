@@ -71,8 +71,38 @@ train_dx = train_dx[0:n_train]
 train_dy = train_dy[0:n_train]
 
 # make one shot data: with 7, 8, 9
-ind = (train_y == 7) | (train_y == 8) | (train_y == 9)
-one_shot_dx, one_shot_dy = make_double_mnist(train_x[ind], train_y[ind], 5000)
+# class0: 7 + 7 = 14
+# class1: 7 + 8 = 15
+# class2: 7 + 9 = 16
+# class3: 8 + 9 = 17
+# class4: 9 + 9 = 18
+ind7 = train_y == 7
+ind8 = train_y == 8
+ind9 = train_y == 9
+
+ind = ind7
+one_shot_dx, one_shot_dy = make_double_mnist(train_x[ind], train_y[ind], 1000)
+
+ind = ind7 | ind8
+tmp_x, tmp_y = make_double_mnist(train_x[ind], train_y[ind], 1000)
+one_shot_dx = np.concatenate([one_shot_dx, tmp_x], 0)
+one_shot_dy = np.concatenate([one_shot_dy, tmp_y], 0)
+
+ind = ind7 | ind9
+tmp_x, tmp_y = make_double_mnist(train_x[ind], train_y[ind], 1000)
+one_shot_dx = np.concatenate([one_shot_dx, tmp_x], 0)
+one_shot_dy = np.concatenate([one_shot_dy, tmp_y], 0)
+
+ind = ind8 | ind9
+tmp_x, tmp_y = make_double_mnist(train_x[ind], train_y[ind], 1000)
+one_shot_dx = np.concatenate([one_shot_dx, tmp_x], 0)
+one_shot_dy = np.concatenate([one_shot_dy, tmp_y], 0)
+
+ind = ind9
+tmp_x, tmp_y = make_double_mnist(train_x[ind], train_y[ind], 1000)
+one_shot_dx = np.concatenate([one_shot_dx, tmp_x], 0)
+one_shot_dy = np.concatenate([one_shot_dy, tmp_y], 0)
+
 
 print 'number of train samples: %d' % len(train_dx)
 print 'number of test samples: %d' % len(test_dx)

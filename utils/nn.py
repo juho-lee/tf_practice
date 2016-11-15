@@ -98,6 +98,11 @@ def deconv_bn(inputs, num_outputs, kernel_size, is_training,
     out = out if activation_fn is None else activation_fn(out)
     return out
 
+def lrelu(x, leak=0.1):
+    f1 = 0.5*(1 + leak)
+    f2 = 0.5*(1 - leak)
+    return f1*x + f2*abs(x)
+
 def get_train_op(loss,
         var_list=None, grad_clip=None, **kwargs):
     optimizer = tf.train.AdamOptimizer(**kwargs)

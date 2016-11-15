@@ -18,22 +18,20 @@ def localize(img, awid, s_max, scope='loc', reuse=None):
 def classify(att0, att1, ft_dim, n_cls, is_tr, scope='cls', reuse=None):
     with tf.variable_scope(scope, reuse=reuse):
         # feature extraction
-        with tf.variable_scope('fext'):
-            cls0 = pool(conv_bn(att0, 16, 3, is_tr, scope='bn0', reuse=reuse), 2)
-            cls0 = pool(conv_bn(cls0, 32, 3, is_tr, scope='bn1', reuse=reuse), 2)
-            cls0 = flat(pool(conv_bn(cls0, 64, 3, is_tr, scope='bn2', reuse=reuse), 2))
-            ft0 = fc_bn(cls0, 200, is_tr, scope='bn3', reuse=reuse)
-            ft0 = linear(ft0, ft_dim)
+        with tf.variable_scope('fext', reuse=reuse):
+            cls0 = pool(conv_bn(att0, 16, 3, is_tr), 2)
+            cls0 = pool(conv_bn(cls0, 32, 3, is_tr), 2)
+            cls0 = pool(conv_bn(cls0, 64, 3, is_tr), 2)
+            cls0 = pool(conv_bn(cls0, 128, 3, is_tr), 2)
+            ft0 = fc(flat(cls0), ft_dim)
         with tf.variable_scope('fext', reuse=True):
-            cls1 = pool(conv_bn(att1, 16, 3, is_tr, scope='bn0', reuse=True), 2)
-            cls1 = pool(conv_bn(cls1, 32, 3, is_tr, scope='bn1', reuse=True), 2)
-            cls1 = flat(pool(conv_bn(cls1, 64, 3, is_tr, scope='bn2', reuse=True), 2))
-            ft1 = fc_bn(cls1, 200, is_tr, scope='bn3', reuse=True)
-            ft1 = linear(ft1, ft_dim)
-
+            cls1 = pool(conv_bn(att1, 16, 3, is_tr), 2)
+            cls1 = pool(conv_bn(cls1, 32, 3, is_tr), 2)
+            cls1 = pool(conv_bn(cls1, 64, 3, is_tr), 2)
+            cls1 = pool(conv_bn(cls1, 128, 3, is_tr), 2)
+            ft1 = fc(flat(cls1), ft_dim)
         # classification
-        logits = fc_bn(tf.concat(1, [ft0, ft1]), 400, is_tr, scope='bn0', reuse=reuse)
-        logits = fc_bn(logits, 200, is_tr, scope='bn1', reuse=reuse)
+        logits = fc_bn(tf.concat(1, [ft0, ft1]), 200, is_tr)
         logits = linear(logits, n_cls)
         return logits, ft0, ft1
 
@@ -59,3 +57,26 @@ def decode(img, z, ft, px, is_tr, scope='dec', reuse=None):
         recon = px.mean(px_param)
         neg_ll = -px.log_likel(img, px_param)
         return recon, neg_ll
+
+def discriminate(att, is_tr, scope='dis', reuse=None):
+    with tf.variable_scope(scope, reuse=reuse):
+        out = conv_bn(att, 32, 5, is_tr, stride=2, activation_fn=lrelu)
+        out = conv_bn(out, 64, 5, is_tr, stride=2, activation_fn=lrelu)
+        out = fc_bn(flat(out), 1024, is_tr, activation_fn=lrelu)
+        rho = linear(out, 1)
+        return rho, out
+
+def recognize(out, c_dim, qc, is_tr, scope='rec', reuse=None):
+    with tf.variable_scope(scope, reuse=reuse):
+        out = fc_bn(out, 128, is_tr, activation_fn=lrelu)
+        out = linear(out, c_dim)
+        return qc.get_param(out)
+
+def generate(z, c, ft, is_tr, scope='gen', reuse=None):
+    with tf.variable_scope(scope, reuse=reuse):
+        out = fc_bn(tf.concat(1, [z, c, ft]), 1024, is_tr)
+        out = fc_bn(tf.concat(1, [out, ft]), 7*7*64, is_tr)
+        out = tf.reshape(out, [-1, 7, 7, 64])
+        out = deconv_bn(out, 32, 5, is_tr, stride=2)
+        out = deconv(out, 1, 5, stride=2, activation_fn=tf.nn.sigmoid)
+        return out
